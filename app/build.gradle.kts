@@ -77,6 +77,12 @@ dependencies {
     implementation(libs.hilt.androidx)
     ksp(libs.hilt.androidx.compiler)
 
+    // Excel parsing
+    implementation("org.apache.poi:poi:5.2.4")
+    implementation("org.apache.poi:poi-ooxml:5.2.4")
+
+    // Для работы с файлами
+    implementation("androidx.documentfile:documentfile:1.0.1")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

@@ -32,10 +32,10 @@ fun Screen3(navController: NavController) {
         Teacher("Демьянова Елена Владимировна", "Молодёжная политика", R.drawable.molodej_politics),
         Teacher("Антонова Мария Евгеньевна", "Директор ЭМК", R.drawable.director_emk),
         Teacher("Митрофанов Андрей Анатольевич", "Декан АиЭ", R.drawable.aie_dekan),
-        Teacher("Зяблицева Ольга Витальевна", "Базы данных, Программирование", R.drawable.teachers_icon),
-        Teacher("Котов Владимир Валерьевич", "ЭВМ и ПУ, Поддержка ПО", R.drawable.teachers_icon),
-        Teacher("Иванов Иван Иванович", "Что-то", R.drawable.teachers_icon),
-        Teacher("Иванов Иван Иванович", "Что-то", R.drawable.teachers_icon)
+        Teacher("Зяблицева Ольга Витальевна", "Базы данных, Программирование", R.drawable.zyabliceva),
+        Teacher("Котов Владимир Валерьевич", "ЭВМ и ПУ, Поддержка ПО", R.drawable.kotov),
+        Teacher("Марихов Иван Николаевич", "Математика", R.drawable.marihov),
+        Teacher("Шенкман Людмила Владиславовна", "Механика, Теоретическая Механика", R.drawable.shenkman)
     )
 
     val filteredTeachers = teachers.filter { teacher ->
