@@ -19,11 +19,12 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import ru.alemak.studentapp.R
 import ru.alemak.studentapp.ui.theme.BlueKGTA
+import ru.alemak.studentapp.utils.DateUtils
 import java.util.*
 
 @Composable
 fun MainScreen(navController: NavController) {
-    val currentWeekType = getCurrentWeekType()
+    val currentWeekType = DateUtils.getCurrentWeekType()
 
     Column(
         modifier = Modifier
@@ -138,27 +139,36 @@ fun MainScreen(navController: NavController) {
 
 /**
  * Функция для определения текущей недели (числитель/знаменатель)
- * Считаем, что первая неделя сентября была числителем
+ * Должна быть идентична функции в ExcelParser
  */
 fun getCurrentWeekType(): String {
     val calendar = Calendar.getInstance()
 
-    // Получаем текущую неделю года
-    val currentWeek = calendar.get(Calendar.WEEK_OF_YEAR)
-
-    // Определяем базовую неделю (первая неделя сентября)
-    // Создаем календарь для 1 сентября текущего года
-    val septemberFirst = Calendar.getInstance().apply {
+    // Используем ТОЧНО ТАКОЙ ЖЕ алгоритм как в ExcelParser
+    // Фиксированная дата начала семестра - 2 сентября 2024 года
+    val startOfSemester = Calendar.getInstance().apply {
+        set(Calendar.YEAR, 2024) // Укажите актуальный год
         set(Calendar.MONTH, Calendar.SEPTEMBER)
-        set(Calendar.DAY_OF_MONTH, 1)
+        set(Calendar.DAY_OF_MONTH, 2) // Первый понедельник сентября
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
     }
-    val baseWeek = septemberFirst.get(Calendar.WEEK_OF_YEAR)
 
-    // Вычисляем разницу в неделях
-    val weekDifference = currentWeek - baseWeek
+    val current = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+
+    // Вычисляем разницу в неделях (такой же алгоритм как в ExcelParser)
+    val diffInMillis = current.timeInMillis - startOfSemester.timeInMillis
+    val weeksDiff = (diffInMillis / (7 * 24 * 60 * 60 * 1000)).toInt()
 
     // Если разница четная - числитель, нечетная - знаменатель
-    return if (weekDifference % 2 == 0) {
+    return if (weeksDiff % 2 == 0) {
         "Числитель"
     } else {
         "Знаменатель"

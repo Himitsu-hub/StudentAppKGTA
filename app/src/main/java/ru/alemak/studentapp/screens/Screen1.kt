@@ -34,6 +34,10 @@ fun Screen1(navController: NavController) {
     var selectedSubgroup by remember { mutableStateOf<String?>(null) }
     var showGroupDialog by remember { mutableStateOf(false) }
     var showSubgroupDialog by remember { mutableStateOf(false) }
+
+    // Добавляем определение текущей недели
+    val currentWeekType = remember { ExcelParser.getCurrentWeekType() }
+
     val coroutineScope = rememberCoroutineScope()
 
     // Функция для загрузки расписания группы и подгруппы
@@ -95,8 +99,20 @@ fun Screen1(navController: NavController) {
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 20.dp),
+                .padding(bottom = 8.dp),
             textAlign = TextAlign.Center
+        )
+
+        // Отображаем текущую неделю
+        Text(
+            text = "Текущая неделя: $currentWeekType",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            textAlign = TextAlign.Center,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
         )
 
         // Кнопка выбора группы
@@ -159,6 +175,12 @@ fun Screen1(navController: NavController) {
                                 color = Color.Gray
                             )
                         }
+                        // Показываем текущую неделю в загрузке
+                        Text(
+                            text = "Неделя: $currentWeekType",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
                     }
                 }
             }
@@ -212,6 +234,12 @@ fun Screen1(navController: NavController) {
                             } else {
                                 "Выберите группу"
                             },
+                            color = Color.Gray
+                        )
+                        // Показываем текущую неделю при пустом расписании
+                        Text(
+                            text = "Неделя: $currentWeekType",
+                            style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray
                         )
                     }
@@ -338,8 +366,6 @@ fun Screen1(navController: NavController) {
         )
     }
 }
-
-
 
 @Composable
 fun DayScheduleCard(day: ScheduleDay) {
