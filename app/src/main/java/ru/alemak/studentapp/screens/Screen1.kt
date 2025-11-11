@@ -1,57 +1,96 @@
 package ru.alemak.studentapp.screens
 
 import android.content.Context
+import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.alemak.studentapp.parsing.ExcelParser
-import android.util.Log
-import androidx.compose.foundation.background
-import androidx.compose.ui.text.style.TextAlign
 import ru.alemak.studentapp.parsing.Lesson
 import ru.alemak.studentapp.parsing.ScheduleDay
+import ru.alemak.studentapp.utils.DateUtils
+import ru.alemak.studentapp.screens.HolidayUtils
+
+
+// === DataStore ===
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.map
+
+val Context.dataStore by preferencesDataStore("user_prefs")
+
+class SchedulePrefs(private val context: Context) {
+    companion object {
+        private val COURSE = intPreferencesKey("selected_course")
+        private val GROUP = stringPreferencesKey("selected_group")
+        private val SUBGROUP = stringPreferencesKey("selected_subgroup")
+    }
+
+    val selectedCourse = context.dataStore.data.map { it[COURSE] ?: 1 }
+    val selectedGroup = context.dataStore.data.map { it[GROUP] }
+    val selectedSubgroup = context.dataStore.data.map { it[SUBGROUP] }
+
+    suspend fun save(course: Int, group: String?, subgroup: String?) {
+        context.dataStore.edit { prefs ->
+            prefs[COURSE] = course
+            if (group != null) prefs[GROUP] = group
+            if (subgroup != null) prefs[SUBGROUP] = subgroup
+        }
+    }
+}
 
 @Composable
 fun Screen1(navController: NavController) {
     val context = LocalContext.current
+    val prefs = remember { SchedulePrefs(context) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Состояния
     var schedule by remember { mutableStateOf<List<ScheduleDay>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
     var availableGroups by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
+    var selectedCourse by remember { mutableStateOf(1) }
     var selectedGroup by remember { mutableStateOf<String?>(null) }
     var selectedSubgroup by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    var showCourseDialog by remember { mutableStateOf(false) }
     var showGroupDialog by remember { mutableStateOf(false) }
     var showSubgroupDialog by remember { mutableStateOf(false) }
 
-    // Добавляем определение текущей недели
-    val currentWeekType = remember { ExcelParser.getCurrentWeekType() }
+    val currentWeekType = remember { DateUtils.getCurrentWeekType() }
 
-    val coroutineScope = rememberCoroutineScope()
-
-    // Функция для загрузки расписания группы и подгруппы
-    val loadSchedule: suspend (Context, String, String?) -> Unit = { ctx, group, subgroup ->
+    // Универсальная функция загрузки расписания
+    val loadSchedule: suspend (Context, Int, String, String?) -> Unit = { ctx, course, group, subgroup ->
         try {
-            Log.d("Screen1", "Загружаем расписание для группы: $group, подгруппа: $subgroup")
+            Log.d("Screen1", "Загружаем расписание: курс=$course, группа=$group, подгруппа=$subgroup")
             val result = withContext(Dispatchers.IO) {
-                ExcelParser.parseScheduleForGroup(ctx, group, subgroup)
+                ExcelParser.parseScheduleForGroup(ctx, course, group, subgroup)
             }
             schedule = result
             errorMessage = null
-            Log.d("Screen1", "Загрузка завершена, дней: ${result.size}")
         } catch (e: Exception) {
-            Log.e("Screen1", "Ошибка загрузки расписания: ${e.message}", e)
+            Log.e("Screen1", "Ошибка загрузки расписания", e)
             errorMessage = "Ошибка загрузки расписания"
             schedule = emptyList()
         } finally {
@@ -59,351 +98,335 @@ fun Screen1(navController: NavController) {
         }
     }
 
-    // Загружаем список групп при первом открытии
+    // Загрузка сохраненных данных при первом запуске экрана
     LaunchedEffect(Unit) {
+        selectedCourse = prefs.selectedCourse.first()
+        selectedGroup = prefs.selectedGroup.first()
+        selectedSubgroup = prefs.selectedSubgroup.first()
+    }
+
+    // При изменении курса — подгружаем группы
+    LaunchedEffect(selectedCourse) {
         try {
-            Log.d("Screen1", "Загружаем список групп с подгруппами...")
+            isLoading = true
             val groups = withContext(Dispatchers.IO) {
-                ExcelParser.getAvailableGroupsWithSubgroups(context)
+                ExcelParser.getAvailableGroupsWithSubgroups(context, selectedCourse)
             }
             availableGroups = groups
-            Log.d("Screen1", "Найдено групп: ${groups.size}")
 
-            // Автоматически выбираем первую группу и первую подгруппу если есть
-            if (groups.isNotEmpty()) {
-                val firstGroup = groups.keys.first()
-                selectedGroup = firstGroup
-                val firstSubgroup = groups[firstGroup]?.firstOrNull()
-                selectedSubgroup = firstSubgroup
-                loadSchedule(context, firstGroup, firstSubgroup)
+            val groupToLoad = selectedGroup ?: groups.keys.firstOrNull()
+            val subgroupToLoad = selectedSubgroup ?: groups[groupToLoad]?.firstOrNull()
+
+            if (groupToLoad != null) {
+                selectedGroup = groupToLoad
+                selectedSubgroup = subgroupToLoad
+                loadSchedule(context, selectedCourse, groupToLoad, subgroupToLoad)
             } else {
                 isLoading = false
-                errorMessage = "Группы не найдены в файле"
+                errorMessage = "Группы не найдены для курса $selectedCourse"
             }
         } catch (e: Exception) {
-            Log.e("Screen1", "Ошибка загрузки групп: ${e.message}", e)
+            Log.e("Screen1", "Ошибка загрузки групп", e)
             isLoading = false
             errorMessage = "Ошибка загрузки списка групп"
         }
     }
 
+    // UI
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
-            .background(Color(0xFFF5F5F5)) // Светло-серый фон
+            .background(Color(0xFFF5F5F5))
     ) {
-        // Заголовок с отступом 20dp снизу
-        Text(
-            text = "Расписание занятий",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            textAlign = TextAlign.Center
-        )
+        Spacer(Modifier.height(25.dp))
 
-        // Отображаем текущую неделю
+        Box(modifier = Modifier.fillMaxWidth()) {
+            IconButton(
+                onClick = { navController.navigateUp() },
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Назад",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Text(
+                "Расписание занятий",
+                style = MaterialTheme.typography.headlineMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+
         Text(
             text = "Текущая неделя: $currentWeekType",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp),
-            textAlign = TextAlign.Center,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+            textAlign = TextAlign.Center
         )
 
-        // Кнопка выбора группы
-        Button(
-            onClick = {
-                Log.d("Screen1", "Открываем диалог выбора группы")
-                showGroupDialog = true
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            enabled = availableGroups.isNotEmpty()
-        ) {
-            Text(selectedGroup ?: "Выбрать группу")
+        // Кнопки выбора
+        SelectionButton("Курс: $selectedCourse") { showCourseDialog = true }
+        SelectionButton(selectedGroup ?: "Выбрать группу") {
+            if (availableGroups.isNotEmpty()) showGroupDialog = true
+        }
+        SelectionButton(selectedSubgroup ?: "Выбрать подгруппу") {
+            if (selectedGroup != null) showSubgroupDialog = true
         }
 
-        // Кнопка выбора подгруппы
-        Button(
-            onClick = {
-                Log.d("Screen1", "Открываем диалог выбора подгруппы")
-                showSubgroupDialog = true
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            enabled = selectedGroup != null && availableGroups[selectedGroup]?.size ?: 0 > 1
-        ) {
-            Text(selectedSubgroup ?: "Выбрать подгруппу")
-        }
-
-        // Отображаем текущую выбранную группу и подгруппу
         if (selectedGroup != null) {
             Text(
                 text = "Текущая: $selectedGroup" +
                         if (selectedSubgroup != null && selectedSubgroup != "Основная") " • $selectedSubgroup" else "",
-                style = MaterialTheme.typography.bodyMedium,
                 color = Color.Gray,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
         }
 
+        Spacer(Modifier.height(12.dp))
+
         when {
-            isLoading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Загрузка расписания...")
-                        if (selectedGroup != null) {
-                            Text(
-                                text = "для $selectedGroup" +
-                                        if (selectedSubgroup != null && selectedSubgroup != "Основная") " • $selectedSubgroup" else "",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.Gray
-                            )
-                        }
-                        // Показываем текущую неделю в загрузке
-                        Text(
-                            text = "Неделя: $currentWeekType",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
+            isLoading -> LoadingState(selectedGroup, selectedSubgroup, currentWeekType)
+            errorMessage != null -> ErrorState(errorMessage!!, selectedGroup, selectedSubgroup) {
+                coroutineScope.launch {
+                    selectedGroup?.let {
+                        isLoading = true
+                        errorMessage = null
+                        loadSchedule(context, selectedCourse, it, selectedSubgroup)
                     }
                 }
             }
-            errorMessage != null -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "Ошибка загрузки",
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = errorMessage ?: "Неизвестная ошибка",
-                            color = Color.Gray,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = {
-                            selectedGroup?.let { group ->
-                                isLoading = true
-                                errorMessage = null
-                                coroutineScope.launch {
-                                    loadSchedule(context, group, selectedSubgroup)
-                                }
-                            }
-                        }) {
-                            Text("Повторить")
-                        }
-                    }
-                }
-            }
-            schedule.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "Расписание не найдено",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = if (selectedGroup != null) {
-                                "для $selectedGroup" +
-                                        if (selectedSubgroup != null && selectedSubgroup != "Основная") " • $selectedSubgroup" else ""
-                            } else {
-                                "Выберите группу"
-                            },
-                            color = Color.Gray
-                        )
-                        // Показываем текущую неделю при пустом расписании
-                        Text(
-                            text = "Неделя: $currentWeekType",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-                    }
-                }
-            }
-            else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(schedule) { day ->
-                        DayScheduleCard(day = day)
-                    }
-                }
+            schedule.isEmpty() -> EmptyState(selectedGroup, selectedSubgroup, currentWeekType)
+            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(schedule) { day -> DayScheduleCard(day) }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
 
-        Button(
-            onClick = { navController.navigateUp() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Button(onClick = { navController.navigateUp() }, modifier = Modifier.fillMaxWidth()) {
             Text("Назад")
         }
     }
 
-    // Диалог выбора группы
-    if (showGroupDialog && availableGroups.isNotEmpty()) {
-        AlertDialog(
-            onDismissRequest = { showGroupDialog = false },
-            title = {
-                Text(
-                    "Выберите группу",
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            text = {
-                LazyColumn {
-                    items(availableGroups.keys.toList()) { group ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(4.dp),
-                            onClick = {
-                                Log.d("Screen1", "Выбрана группа: $group")
-                                selectedGroup = group
-                                // Автоматически выбираем первую подгруппу для этой группы
-                                selectedSubgroup = availableGroups[group]?.firstOrNull()
-                                showGroupDialog = false
-                                isLoading = true
-                                coroutineScope.launch {
-                                    loadSchedule(context, group, selectedSubgroup)
-                                }
-                            }
-                        ) {
-                            Text(
-                                text = group,
-                                modifier = Modifier.padding(16.dp),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showGroupDialog = false },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Отмена")
-                }
-            }
-        )
-    }
+    // Диалоги выбора
+    if (showCourseDialog) CourseDialog(
+        selectedCourse,
+        onSelect = { course ->
+            selectedCourse = course
+            coroutineScope.launch { prefs.save(course, selectedGroup, selectedSubgroup) }
+            showCourseDialog = false
+        },
+        onDismiss = { showCourseDialog = false }
+    )
 
-    // Диалог выбора подгруппы
-    if (showSubgroupDialog && selectedGroup != null) {
-        val subgroups = availableGroups[selectedGroup] ?: emptyList()
-        AlertDialog(
-            onDismissRequest = { showSubgroupDialog = false },
-            title = {
-                Text(
-                    "Выберите подгруппу для $selectedGroup",
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            text = {
-                LazyColumn {
-                    items(subgroups) { subgroup ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(4.dp),
-                            onClick = {
-                                Log.d("Screen1", "Выбрана подгруппа: $subgroup")
-                                selectedSubgroup = subgroup
-                                showSubgroupDialog = false
-                                isLoading = true
-                                coroutineScope.launch {
-                                    loadSchedule(context, selectedGroup!!, subgroup)
-                                }
-                            }
-                        ) {
-                            Text(
-                                text = subgroup,
-                                modifier = Modifier.padding(16.dp),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
+    if (showGroupDialog && availableGroups.isNotEmpty()) GroupDialog(
+        availableGroups.keys.toList(),
+        onSelect = { group ->
+            selectedGroup = group
+            selectedSubgroup = availableGroups[group]?.firstOrNull()
+            coroutineScope.launch {
+                prefs.save(selectedCourse, group, selectedSubgroup)
+                isLoading = true
+                loadSchedule(context, selectedCourse, group, selectedSubgroup)
+            }
+            showGroupDialog = false
+        },
+        onDismiss = { showGroupDialog = false }
+    )
+
+    if (showSubgroupDialog && selectedGroup != null) SubgroupDialog(
+        availableGroups[selectedGroup] ?: emptyList(),
+        selectedGroup!!,
+        onSelect = { subgroup ->
+            selectedSubgroup = subgroup
+            coroutineScope.launch {
+                prefs.save(selectedCourse, selectedGroup, subgroup)
+                isLoading = true
+                loadSchedule(context, selectedCourse, selectedGroup!!, subgroup)
+            }
+            showSubgroupDialog = false
+        },
+        onDismiss = { showSubgroupDialog = false }
+    )
+}
+
+// === Вспомогательные компоненты ===
+
+@Composable
+fun SelectionButton(text: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Text(text)
+    }
+}
+
+@Composable
+fun CourseDialog(selected: Int, onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Выберите курс", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        text = {
+            LazyColumn {
+                items((1..4).toList()) { course ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(4.dp),
+                        onClick = { onSelect(course) }
+                    ) {
+                        Text("$course курс", modifier = Modifier.padding(16.dp))
                     }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showSubgroupDialog = false },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Отмена")
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
+        }
+    )
+}
+
+@Composable
+fun GroupDialog(groups: List<String>, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Выберите группу", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        text = {
+            LazyColumn {
+                items(groups) { group ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(4.dp),
+                        onClick = { onSelect(group) }
+                    ) {
+                        Text(group, modifier = Modifier.padding(16.dp))
+                    }
                 }
             }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
+        }
+    )
+}
+
+@Composable
+fun SubgroupDialog(subgroups: List<String>, groupName: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Подгруппа для $groupName", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        text = {
+            LazyColumn {
+                items(subgroups) { subgroup ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(4.dp),
+                        onClick = { onSelect(subgroup) }
+                    ) {
+                        Text(subgroup, modifier = Modifier.padding(16.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Отмена") }
+        }
+    )
+}
+
+@Composable
+fun DayScheduleCard(day: ScheduleDay) {
+    val holidayName = HolidayUtils.getHolidayName(DateUtils.getDateForDay(day.dayName))
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(day.dayName, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(12.dp))
+            when {
+                holidayName != null -> {
+                    Text(holidayName, color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold)
+                    Text("Праздничный день 🎉", color = Color.Gray)
+                }
+                day.lessons.isEmpty() -> Text("Пар нет", color = Color.Gray)
+                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    day.lessons.forEach { LessonItem(it) }
+                }
+            }
+        }
+    }
+}
+@Composable
+fun LoadingState(group: String?, subgroup: String?, weekType: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator()
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "Загружаем расписание...",
+            color = Color.Gray
         )
     }
 }
 
 @Composable
-fun DayScheduleCard(day: ScheduleDay) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+fun ErrorState(
+    message: String,
+    group: String?,
+    subgroup: String?,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = day.dayName,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
+        Text("Ошибка 😔", color = Color.Red, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(message, color = Color.Gray, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onRetry) { Text("Повторить") }
+    }
+}
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (day.lessons.isEmpty()) {
-                Text(
-                    text = "Пар нет",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-            } else {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    day.lessons.forEach { lesson ->
-                        LessonItem(lesson = lesson)
-                    }
-                }
-            }
-        }
+@Composable
+fun EmptyState(group: String?, subgroup: String?, weekType: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Нет занятий 📚", color = Color.Gray, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Для выбранной группы и недели расписание отсутствует",
+            color = Color.Gray,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -411,61 +434,27 @@ fun DayScheduleCard(day: ScheduleDay) {
 fun LessonItem(lesson: Lesson) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFF5F5F5)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(lesson.time, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Text(
-                    text = lesson.time,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                )
-                Text(
-                    text = lesson.type,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = when (lesson.type) {
+                    lesson.type,
+                    color = when (lesson.type.lowercase()) {
                         "лекция" -> Color(0xFF1976D2)
                         "практика" -> Color(0xFF388E3C)
                         "лабораторная" -> Color(0xFFF57C00)
                         else -> Color.Gray
-                    }
+                    },
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = lesson.subject,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
-            )
-
-            if (lesson.teacher.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = lesson.teacher,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-            }
-
-            if (lesson.room.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Аудитория: ${lesson.room}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
-                )
-            }
+            Spacer(Modifier.height(4.dp))
+            Text(lesson.subject, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            if (lesson.teacher.isNotBlank()) Text(lesson.teacher, color = Color.Gray)
+            if (lesson.room.isNotBlank()) Text("Аудитория: ${lesson.room}", color = Color.Gray)
         }
     }
 }

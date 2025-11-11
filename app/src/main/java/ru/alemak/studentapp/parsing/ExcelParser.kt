@@ -4,90 +4,82 @@ import android.content.Context
 import android.util.Log
 import org.apache.poi.ss.usermodel.Sheet
 import org.apache.poi.ss.usermodel.WorkbookFactory
+import ru.alemak.studentapp.screens.HolidayUtils
 import ru.alemak.studentapp.utils.DateUtils
 import java.io.InputStream
 
 object ExcelParser {
     private const val TAG = "ExcelParser"
 
-    // Получаем список доступных групп с подгруппами
-    fun getAvailableGroupsWithSubgroups(context: Context): Map<String, List<String>> {
+    fun getAvailableGroupsWithSubgroups(context: Context, course: Int): Map<String, List<String>> {
         return try {
-            context.assets.open("schedule.xlsx").use { inputStream ->
-                getGroupsWithSubgroupsFromExcel(inputStream)
+            val fileName = "schedule${course}.xlsx"
+            context.assets.open(fileName).use { inputStream ->
+                getGroupsWithSubgroupsFromExcel(inputStream, course)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Ошибка получения списка групп: ${e.message}", e)
+            Log.e(TAG, "Ошибка получения списка групп для курса $course: ${e.message}", e)
             emptyMap()
         }
     }
 
-    // Парсим расписание для конкретной группы и подгруппы
-    fun parseScheduleForGroup(context: Context, groupName: String, subgroup: String? = null): List<ScheduleDay> {
-        return try {
-            Log.d(TAG, "Парсим расписание для группы: $groupName, подгруппа: $subgroup")
 
-            context.assets.open("schedule.xlsx").use { inputStream ->
+    fun parseScheduleForGroup(context: Context, course: Int, groupName: String, subgroup: String? = null): List<ScheduleDay> {
+        return try {
+            val fileName = "schedule${course}.xlsx"
+            Log.d(TAG, "Парсим расписание (курс $course): $fileName для группы $groupName, подгруппа: $subgroup")
+
+            context.assets.open(fileName).use { inputStream ->
                 val result = parseExcelFileForGroup(inputStream, groupName, subgroup)
                 Log.d(TAG, "Парсинг завершен, найдено дней: ${result.size}")
-                result.forEach { day ->
-                    Log.d(TAG, "${day.dayName}: ${day.lessons.size} пар")
-                }
                 result
             }
         } catch (e: Exception) {
-            Log.e(TAG, "ОШИБКА при парсинге: ${e.message}", e)
+            Log.e(TAG, "ОШИБКА при парсинге курса $course: ${e.message}", e)
             emptyList()
         }
     }
 
-    private fun getGroupsWithSubgroupsFromExcel(inputStream: InputStream): Map<String, List<String>> {
+
+    private fun getGroupsWithSubgroupsFromExcel(inputStream: InputStream, course: Int): Map<String, List<String>> {
         val workbook = WorkbookFactory.create(inputStream)
         val sheet = workbook.getSheetAt(0)
         val groupsMap = mutableMapOf<String, MutableList<String>>()
 
-        Log.d(TAG, "=== ПОИСК ГРУПП И ПОДГРУПП В ФАЙЛЕ ===")
+        // 🔢 Определяем номер по курсу
+        val courseSuffix = when (course) {
+            1 -> "125"
+            2 -> "124"
+            3 -> "123"
+            4 -> "122"
+            else -> "124"
+        }
+
+        Log.d(TAG, "=== ПОИСК ГРУПП ДЛЯ КУРСА $course ($courseSuffix) ===")
 
         val groupsRow = sheet.getRow(2) ?: return emptyMap()
         val groupRanges = mapOf(
-            "И-124" to (13..15),   // N-P
-            "У-124" to (21..25),   // V-Z
-            "П-124" to (29..30),   // AD-AE
-            "ЭТ-124" to (31..32)   // AF-AG
+            "И-$courseSuffix" to (13..15),   // N–P
+            "У-$courseSuffix" to (21..25),   // V–Z
+            "П-$courseSuffix" to (29..30),   // AD–AE
+            "ЭТ-$courseSuffix" to (31..32)   // AF–AG
         )
-
-        Log.d(TAG, "Определены диапазоны групп: $groupRanges")
 
         groupRanges.forEach { (group, range) ->
             groupsMap[group] = mutableListOf()
             Log.d(TAG, "=== ОБРАБОТКА ГРУППЫ: $group ===")
-            Log.d(TAG, "Диапазон колонок: $range")
 
-            var groupFound = false
-            for (col in range) {
-                val groupCell = groupsRow.getCell(col)?.toString()?.trim()
-                if (groupCell == group) {
-                    groupFound = true
-                    break
-                }
+            when {
+                group.startsWith("И-") -> groupsMap[group]?.addAll(listOf("1 подгруппа", "2 подгруппа"))
+                else -> groupsMap[group]?.addAll(listOf("Основная", "3 подгруппа"))
             }
-
-            if (!groupFound) {
-                Log.w(TAG, "Группа $group не найдена в своем диапазоне $range")
-            }
-
-            when (group) {
-                "И-124" -> groupsMap[group]?.addAll(listOf("1 подгруппа", "2 подгруппа"))
-                "У-124", "П-124", "ЭТ-124" -> groupsMap[group]?.addAll(listOf("Основная", "3 подгруппа"))
-            }
-
-            Log.d(TAG, "Итоговые подгруппы для $group: ${groupsMap[group]}")
         }
 
         workbook.close()
-        Log.d(TAG, "Итоговый список групп с подгруппами: $groupsMap")
+        Log.d(TAG, "Итоговый список групп ($courseSuffix): $groupsMap")
         return groupsMap
     }
+
 
     private fun parseExcelFileForGroup(inputStream: InputStream, groupName: String, subgroup: String?): List<ScheduleDay> {
         val workbook = WorkbookFactory.create(inputStream)
@@ -111,11 +103,11 @@ object ExcelParser {
 
     private fun findMergedCellsForGroup(sheet: Sheet, groupName: String): List<MergedCellInfo> {
         val mergedCells = mutableListOf<MergedCellInfo>()
-        val groupColumns = when (groupName) {
-            "И-124" -> (13..15).toList()
-            "У-124" -> (21..25).toList()
-            "П-124" -> (29..30).toList()
-            "ЭТ-124" -> (31..32).toList()
+        val groupColumns = when {
+            groupName.startsWith("И-") -> (13..15).toList()   // N–P
+            groupName.startsWith("У-") -> (21..25).toList()   // V–Z
+            groupName.startsWith("П-") -> (29..30).toList()   // AD–AE
+            groupName.startsWith("ЭТ-") -> (31..32).toList()  // AF–AG
             else -> emptyList()
         }
 
@@ -143,11 +135,9 @@ object ExcelParser {
         }
 
         Log.d(TAG, "Найдено объединенных ячеек для $groupName: ${mergedCells.size}")
-        mergedCells.forEach {
-            Log.d(TAG, "Объединение: строки ${it.firstRow}-${it.lastRow}, колонки ${it.firstColumn}-${it.lastColumn} (${it.rowCount}x${it.colCount})")
-        }
         return mergedCells
     }
+
 
     data class MergedCellInfo(
         val firstRow: Int,
@@ -159,53 +149,29 @@ object ExcelParser {
     )
 
     private fun findGroupColumn(sheet: Sheet, groupName: String, subgroup: String?): Int {
-        val groupRanges = mapOf(
-            "И-124" to (13..15),
-            "У-124" to (21..25),
-            "П-124" to (29..30),
-            "ЭТ-124" to (31..32)
-        )
+        val range = when {
+            groupName.startsWith("И-") -> 13..15
+            groupName.startsWith("У-") -> 21..25
+            groupName.startsWith("П-") -> 29..30
+            groupName.startsWith("ЭТ-") -> 31..32
+            else -> return -1
+        }
 
-        val range = groupRanges[groupName] ?: return -1
-        Log.d(TAG, "Поиск группы '$groupName' с подгруппой '$subgroup' в диапазоне $range")
+        Log.d(TAG, "Поиск колонки для '$groupName' ($subgroup) в диапазоне $range")
 
-        val chosenColumn = when (groupName) {
-            "И-124" -> when (subgroup) {
-                "1 подгруппа" -> 13
-                "2 подгруппа" -> 15
-                else -> 13
-            }
-            "У-124" -> when (subgroup) {
-                "Основная" -> 21
-                "3 подгруппа" -> 25
-                else -> 21
-            }
-            "П-124" -> when (subgroup) {
-                "Основная" -> 29
-                "3 подгруппа" -> 30
-                else -> 29
-            }
-            "ЭТ-124" -> when (subgroup) {
-                "Основная" -> 31
-                "3 подгруппа" -> 32
-                else -> 31
-            }
+        val chosenColumn = when {
+            groupName.startsWith("И-") -> if (subgroup?.contains("2") == true) 15 else 13
+            groupName.startsWith("У-") -> if (subgroup?.contains("3") == true) 25 else 21
+            groupName.startsWith("П-") -> if (subgroup?.contains("3") == true) 30 else 29
+            groupName.startsWith("ЭТ-") -> if (subgroup?.contains("3") == true) 32 else 31
             else -> range.first
         }
 
-        val testRow = sheet.getRow(4)
-        val candidateCols = range.filter { col ->
-            testRow?.getCell(col)?.toString()?.trim()?.isNotEmpty() == true
-        }
-        val finalCol = if (candidateCols.isNotEmpty()) {
-            if (subgroup?.contains("2") == true && candidateCols.size > 1) candidateCols.last() else candidateCols.first()
-        } else {
-            chosenColumn
-        }
-
+        val finalCol = chosenColumn
         Log.d(TAG, "Для '$groupName' ($subgroup) выбрана колонка $finalCol (${toExcelColumn(finalCol)})")
         return finalCol
     }
+
 
     private fun parseScheduleWithMerges(
         sheet: Sheet,
@@ -216,6 +182,7 @@ object ExcelParser {
     ): List<ScheduleDay> {
         val scheduleDays = mutableListOf<ScheduleDay>()
         val currentWeekType = getCurrentWeekType()
+        val LAST_SCHEDULE_ROW = 84  // После этой строки не парсим — там подписи
 
         val days = listOf(
             "Понедельник" to 4,
@@ -227,45 +194,84 @@ object ExcelParser {
         )
 
         days.forEach { (dayName, startRow) ->
+            // Если начало дня выше предела — пропускаем
+            if (startRow > LAST_SCHEDULE_ROW) {
+                Log.d(TAG, "Пропускаем день $dayName — начинается за пределами расписания (строка $startRow)")
+                return@forEach
+            }
+
             Log.d(TAG, "Обрабатываем день: $dayName (начинается со строки $startRow)")
-            val lessons = parseLessonsForDayWithMerges(
-                sheet, startRow, groupColumn, groupName, subgroup,
-                currentWeekType, mergedCellsInfo
+
+            // Получаем дату для дня недели
+            val dayDate = DateUtils.getDateForDay(dayName)
+            Log.d(TAG, "Дата для дня $dayName: $dayDate")
+
+            // Проверка на праздничный день
+            if (HolidayUtils.isHoliday(dayDate)) {
+                val holidayName = HolidayUtils.getHolidayName(dayDate) ?: "Праздничный день"
+                Log.d(TAG, "Праздничный день: $holidayName")
+
+                // Добавляем день как праздничный
+                scheduleDays.add(
+                    ScheduleDay(
+                        dayName,
+                        listOf(
+                            Lesson(
+                                time = "",
+                                subject = holidayName,
+                                teacher = "",
+                                room = "",
+                                type = "праздник"
+                            )
+                        )
+                    )
+                )
+                return@forEach // Пропускаем дальнейшую обработку расписания для этого дня
+            }
+
+            // Если день не праздничный, обрабатываем расписание
+            val allLessons = parseLessonsForDayWithMerges(
+                sheet,
+                startRow,
+                groupColumn,
+                groupName,
+                subgroup,
+                currentWeekType,
+                mergedCellsInfo
             )
-            Log.d(TAG, "Для дня $dayName найдено пар: ${lessons.size}")
+
+            // Фильтруем пары, которые не выходят за пределы 84-й строки
+            val lessons = allLessons.filterIndexed { index, _ ->
+                val rowForPair = startRow + index * 2
+                rowForPair <= LAST_SCHEDULE_ROW
+            }
+
+            Log.d(TAG, "Для дня $dayName найдено валидных пар: ${lessons.size}")
+
             if (lessons.isNotEmpty()) {
                 scheduleDays.add(ScheduleDay(dayName, lessons))
             }
         }
 
+        Log.d(TAG, "Парсинг завершен — обработано ${scheduleDays.size} дней (до строки $LAST_SCHEDULE_ROW)")
         return scheduleDays
     }
 
+
+
+
+
+
     private fun getColumnsForSubgroup(groupName: String, subgroup: String?): Pair<Int, Int> {
-        return when (groupName) {
-            "И-124" -> when (subgroup) {
-                "1 подгруппа" -> 13 to 14
-                "2 подгруппа" -> 15 to 15
-                else -> 13 to 14
-            }
-            "У-124" -> when (subgroup) {
-                "Основная" -> 21 to 22
-                "3 подгруппа" -> 25 to 25
-                else -> 21 to 22
-            }
-            "П-124" -> when (subgroup) {
-                "Основная" -> 29 to 29
-                "3 подгруппа" -> 30 to 30
-                else -> 29 to 29
-            }
-            "ЭТ-124" -> when (subgroup) {
-                "Основная" -> 31 to 31
-                "3 подгруппа" -> 32 to 32
-                else -> 31 to 31
-            }
+        return when {
+            groupName.startsWith("И-") -> if (subgroup?.contains("2") == true) 15 to 15 else 13 to 14
+            groupName.startsWith("У-") -> if (subgroup?.contains("3") == true) 25 to 25 else 21 to 22
+            groupName.startsWith("П-") -> if (subgroup?.contains("3") == true) 30 to 30 else 29 to 29
+            groupName.startsWith("ЭТ-") -> if (subgroup?.contains("3") == true) 32 to 32 else 31 to 31
             else -> 13 to 14
         }
     }
+
 
     private fun parseLessonsForDayWithMerges(
         sheet: Sheet,
@@ -278,21 +284,41 @@ object ExcelParser {
     ): List<Lesson> {
         val lessons = mutableListOf<Lesson>()
         val (numeratorColumn, denominatorColumn) = getColumnsForSubgroup(groupName, subgroup)
+        val LAST_SCHEDULE_ROW = 84
+
         Log.d(TAG, "Колонки для $groupName ($subgroup): числитель=$numeratorColumn, знаменатель=$denominatorColumn")
 
         for (pairIndex in 0..6) {
             val numeratorRowNum = startRow + pairIndex * 2
             val denominatorRowNum = numeratorRowNum + 1
+
+            // 🔥 Если пара выходит за пределы 84 строки — не читаем
+            if (numeratorRowNum > LAST_SCHEDULE_ROW || denominatorRowNum > LAST_SCHEDULE_ROW) {
+                Log.d(TAG, "Достигнут предел расписания (строка $numeratorRowNum), дальше не парсим.")
+                break
+            }
+
             val pairNumber = pairIndex + 1
             val time = getTimeByPairNumber(pairNumber.toString())
             val selectedColumn = if (currentWeekType == "Числитель") numeratorColumn else denominatorColumn
 
             val lesson = parseLessonWithMerges(
-                sheet, numeratorRowNum, denominatorRowNum, selectedColumn,
-                groupName, subgroup, currentWeekType, time, mergedCellsInfo
+                sheet,
+                numeratorRowNum,
+                denominatorRowNum,
+                selectedColumn,
+                groupName,
+                subgroup,
+                currentWeekType,
+                time,
+                mergedCellsInfo
             )
-            if (lesson != null) lessons.add(lesson)
+
+            if (lesson != null) {
+                lessons.add(lesson)
+            }
         }
+
         return lessons
     }
 

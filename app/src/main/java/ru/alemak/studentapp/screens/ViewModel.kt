@@ -5,10 +5,10 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 object RemindersManager {
-    private val _reminders = mutableStateListOf<Reminder>()
-    val reminders: List<Reminder> get() = _reminders
+    private val _reminders = mutableStateListOf<ru.alemak.studentapp.screens.Reminder>()
+    val reminders: List<ru.alemak.studentapp.screens.Reminder> get() = _reminders
 
-    fun addReminder(reminder: Reminder) {
+    fun addReminder(reminder: ru.alemak.studentapp.screens.Reminder) {
         _reminders.add(reminder)
     }
 

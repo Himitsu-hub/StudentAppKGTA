@@ -17,26 +17,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
-import ru.alemak.studentapp.managers.Reminder
-import ru.alemak.studentapp.managers.RemindersManager
+import ru.alemak.studentapp.screens.RemindersManager
+import ru.alemak.studentapp.screens.Reminder
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 import java.util.*
 
 @Composable
 fun Screen2(navController: NavController) {
-    var reminders by remember { mutableStateOf(RemindersManager.reminders) }
+    val context = LocalContext.current
+    var reminders by remember { mutableStateOf(emptyList<Reminder>()) }
+
+    // Загружаем сохранённые напоминания при старте
+    LaunchedEffect(Unit) {
+        RemindersManager.load(context)
+        reminders = RemindersManager.reminders
+    }
+
     var showAddDialog by remember { mutableStateOf(false) }
     var showCompletionDialog by remember { mutableStateOf<Reminder?>(null) }
 
-    // Функция для обновления списка напоминаний
     fun updateReminders() {
         reminders = RemindersManager.reminders
     }
+
 
     Column(
         modifier = Modifier
@@ -56,9 +65,7 @@ fun Screen2(navController: NavController) {
                 .padding(bottom = 20.dp)
         )
 
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
                 modifier = Modifier.align(Alignment.TopEnd),
@@ -81,11 +88,7 @@ fun Screen2(navController: NavController) {
                     .fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Нет напоминаний",
-                    color = Color.White,
-                    fontSize = 18.sp
-                )
+                Text("Нет напоминаний", color = Color.White, fontSize = 18.sp)
             }
         } else {
             LazyColumn(
@@ -109,30 +112,33 @@ fun Screen2(navController: NavController) {
             onClick = { navController.navigateUp() },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 50.dp)
+                .padding(horizontal = 50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.White)
         ) {
-            Text("Назад")
+            Text("Назад", color = BlueKGTA, fontSize = 18.sp)
         }
     }
 
+    // Диалог добавления напоминания
     if (showAddDialog) {
         AddReminderDialog(
             onDismiss = { showAddDialog = false },
             onAddReminder = { newReminder ->
-                RemindersManager.addReminder(newReminder)
-                updateReminders() // Обновляем список
+                RemindersManager.addReminder(context, newReminder)
+                updateReminders()
                 showAddDialog = false
             }
         )
     }
 
-    if (showCompletionDialog != null) {
+    // Диалог завершения напоминания
+    showCompletionDialog?.let { reminder ->
         CompleteReminderDialog(
-            reminder = showCompletionDialog!!,
+            reminder = reminder,
             onDismiss = { showCompletionDialog = null },
             onConfirmComplete = { reminderToDelete ->
-                RemindersManager.deleteReminder(reminderToDelete.id)
-                updateReminders() // Обновляем список
+                RemindersManager.deleteReminder(context, reminderToDelete.id)
+                updateReminders()
                 showCompletionDialog = null
             }
         )
@@ -164,26 +170,20 @@ fun ReminderItem(
                     .clip(CircleShape)
                     .background(Color.Transparent)
                     .border(2.dp, Color.Gray, CircleShape)
-                    .clickable {
-                        onToggleCompleted(reminder)
-                    },
+                    .clickable { onToggleCompleted(reminder) },
                 contentAlignment = Alignment.Center
             ) {}
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = reminder.text,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.Black
                 )
-
                 Spacer(modifier = Modifier.height(4.dp))
-
                 Text(
                     text = reminder.getFormattedDateTime(),
                     fontSize = 12.sp,
@@ -192,50 +192,6 @@ fun ReminderItem(
             }
         }
     }
-}
-
-@Composable
-fun CompleteReminderDialog(
-    reminder: Reminder,
-    onDismiss: () -> Unit,
-    onConfirmComplete: (Reminder) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text("Завершить напоминание?")
-        },
-        text = {
-            Text("Вы уверены, что хотите отметить напоминание \"${reminder.text}\" как выполненное?")
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirmComplete(reminder) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Green
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Подтвердить",
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Да, завершить",
-                    fontSize = 16.sp
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    "Отмена",
-                    fontSize = 16.sp
-                )
-            }
-        }
-    )
 }
 
 @Composable
@@ -286,10 +242,14 @@ fun AddReminderDialog(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     OutlinedTextField(
-                        value = "${selectedDate.get(Calendar.DAY_OF_MONTH)}." +
-                                "${selectedDate.get(Calendar.MONTH) + 1}." +
-                                "${selectedDate.get(Calendar.YEAR)}",
-                        onValueChange = { },
+                        value = String.format(
+                            Locale.getDefault(),
+                            "%02d.%02d.%04d",
+                            selectedDate.get(Calendar.DAY_OF_MONTH),
+                            selectedDate.get(Calendar.MONTH) + 1,
+                            selectedDate.get(Calendar.YEAR)
+                        ),
+                        onValueChange = {},
                         label = { Text("Дата") },
                         modifier = Modifier.weight(1f),
                         readOnly = true
@@ -298,8 +258,8 @@ fun AddReminderDialog(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     OutlinedTextField(
-                        value = String.format("%02d:%02d", selectedHour, selectedMinute),
-                        onValueChange = { },
+                        value = String.format(Locale.getDefault(), "%02d:%02d", selectedHour, selectedMinute),
+                        onValueChange = {},
                         label = { Text("Время") },
                         modifier = Modifier.weight(1f),
                         readOnly = true
@@ -331,10 +291,8 @@ fun AddReminderDialog(
                                 }
 
                                 val newReminder = Reminder(
-                                    id = UUID.randomUUID().toString(),
                                     text = reminderText,
-                                    dateTime = calendar.time,
-                                    isCompleted = false
+                                    dateTime = calendar.time
                                 )
                                 onAddReminder(newReminder)
                             }
@@ -347,4 +305,38 @@ fun AddReminderDialog(
             }
         }
     }
+}
+
+@Composable
+fun CompleteReminderDialog(
+    reminder: Reminder,
+    onDismiss: () -> Unit,
+    onConfirmComplete: (Reminder) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Завершить напоминание?") },
+        text = {
+            Text("Вы уверены, что хотите отметить напоминание \"${reminder.text}\" как выполненное?")
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirmComplete(reminder) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Подтвердить",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Да, завершить", fontSize = 16.sp)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена", fontSize = 16.sp)
+            }
+        }
+    )
 }

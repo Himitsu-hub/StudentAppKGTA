@@ -6,7 +6,6 @@ object DateUtils {
     fun getCurrentWeekType(): String {
         val calendar = Calendar.getInstance()
 
-        // Фиксированная дата начала семестра - 2 сентября 2024 года
         val startOfSemester = Calendar.getInstance().apply {
             set(Calendar.YEAR, 2024)
             set(Calendar.MONTH, Calendar.SEPTEMBER)
@@ -29,4 +28,38 @@ object DateUtils {
 
         return if (weeksDiff % 2 == 0) "Числитель" else "Знаменатель"
     }
+
+    fun getTodayName(): String {
+        val days = listOf(
+            "Понедельник", "Вторник", "Среда",
+            "Четверг", "Пятница", "Суббота", "Воскресенье"
+        )
+        val calendar = Calendar.getInstance()
+        val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
+        return days[(dayOfWeek + 5) % 7]
+    }
+
+    fun getDateForDay(dayName: String): Date {
+        val dayMap = mapOf(
+            "Понедельник" to Calendar.MONDAY,
+            "Вторник" to Calendar.TUESDAY,
+            "Среда" to Calendar.WEDNESDAY,
+            "Четверг" to Calendar.THURSDAY,
+            "Пятница" to Calendar.FRIDAY,
+            "Суббота" to Calendar.SATURDAY,
+            "Воскресенье" to Calendar.SUNDAY
+        )
+
+        val calendar = Calendar.getInstance()
+        val today = calendar.get(Calendar.DAY_OF_WEEK)
+        val targetDay = dayMap[dayName] ?: Calendar.MONDAY
+
+        // Разница в днях между целевым и текущим днем недели
+        var diff = targetDay - today
+        if (diff < 0) diff += 7 // если целевой день уже прошел, переносим на следующий цикл недели
+
+        calendar.add(Calendar.DAY_OF_MONTH, diff)
+        return calendar.time
+    }
+
 }
