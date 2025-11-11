@@ -36,7 +36,6 @@ fun MainScreen(navController: NavController) {
     var nextLesson by remember { mutableStateOf<Lesson?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // === Загрузка ближайшей пары ===
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             try {
@@ -47,11 +46,35 @@ fun MainScreen(navController: NavController) {
 
                 if (group != null) {
                     val schedule = ExcelParser.parseScheduleForGroup(context, course, group, subgroup)
+
+                    val calendar = Calendar.getInstance()
                     val today = DateUtils.getTodayName()
+                    val currentTime = calendar.time
+
                     val todaySchedule = schedule.find { it.dayName.equals(today, ignoreCase = true) }
 
-                    val upcoming = todaySchedule?.lessons?.firstOrNull()
-                    nextLesson = upcoming
+                    // Попробуем найти ближайшую пару сегодня
+                    val sdf = SimpleDateFormat("HH:mm", Locale("ru"))
+                    val upcomingToday = todaySchedule?.lessons?.firstOrNull { lesson ->
+                        val lessonTime = sdf.parse(lesson.time.split("-")[0]) // начало пары
+                        lessonTime?.after(currentTime) == true
+                    }
+
+                    if (upcomingToday != null) {
+                        nextLesson = upcomingToday
+                    } else {
+                        // Если все пары на сегодня уже прошли — ищем первую пару следующего дня
+                        val days = listOf(
+                            "Понедельник", "Вторник", "Среда",
+                            "Четверг", "Пятница", "Суббота", "Воскресенье"
+                        )
+
+                        val nextDayIndex = (days.indexOf(today) + 1) % days.size
+                        val nextDayName = days[nextDayIndex]
+                        val nextDaySchedule = schedule.find { it.dayName.equals(nextDayName, ignoreCase = true) }
+
+                        nextLesson = nextDaySchedule?.lessons?.firstOrNull()
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -60,6 +83,7 @@ fun MainScreen(navController: NavController) {
             }
         }
     }
+
 
     // === Текущее число и день недели ===
     val dateFormat = SimpleDateFormat("EEEE, d MMMM", Locale("ru"))

@@ -51,15 +51,16 @@ object DateUtils {
         )
 
         val calendar = Calendar.getInstance()
-        val today = calendar.get(Calendar.DAY_OF_WEEK)
+
+        // Устанавливаем календарь на начало текущей недели (понедельник)
+        calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+
+        // Получаем нужный день
         val targetDay = dayMap[dayName] ?: Calendar.MONDAY
+        calendar.set(Calendar.DAY_OF_WEEK, targetDay)
 
-        // Разница в днях между целевым и текущим днем недели
-        var diff = targetDay - today
-        if (diff < 0) diff += 7 // если целевой день уже прошел, переносим на следующий цикл недели
-
-        calendar.add(Calendar.DAY_OF_MONTH, diff)
         return calendar.time
     }
+
 
 }

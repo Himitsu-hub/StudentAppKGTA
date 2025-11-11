@@ -10,5 +10,5 @@ data class Lesson(
     val subject: String,
     val teacher: String,
     val room: String,
-    val type: String // лекция/практика/лабораторная
+    val type: String
 )
