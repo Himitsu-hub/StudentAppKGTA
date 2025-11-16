@@ -2,6 +2,7 @@ package ru.alemak.studentapp.screens
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -63,6 +64,7 @@ fun Screen1(navController: NavController) {
     val prefs = remember { SchedulePrefs(context) }
     val coroutineScope = rememberCoroutineScope()
 
+    // Состояния
     var schedule by remember { mutableStateOf<List<ScheduleDay>>(emptyList()) }
     var availableGroups by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var selectedCourse by remember { mutableStateOf(1) }
@@ -71,20 +73,25 @@ fun Screen1(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Добавили флаг — загружены ли prefs
+    var isPrefsLoaded by remember { mutableStateOf(false) }
+
     var showCourseDialog by remember { mutableStateOf(false) }
     var showGroupDialog by remember { mutableStateOf(false) }
     var showSubgroupDialog by remember { mutableStateOf(false) }
 
     val currentWeekType = remember { DateUtils.getCurrentWeekType() }
 
+    // ===== Функция загрузки расписания =====
     val loadSchedule: suspend (Context, Int, String, String?) -> Unit = { ctx, course, group, subgroup ->
         try {
+            isLoading = true
             val result = withContext(Dispatchers.IO) {
                 ExcelParser.parseScheduleForGroup(ctx, course, group, subgroup)
             }
             schedule = result
             errorMessage = null
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             errorMessage = "Ошибка загрузки расписания"
             schedule = emptyList()
         } finally {
@@ -92,13 +99,18 @@ fun Screen1(navController: NavController) {
         }
     }
 
+    // ===== 1. Сначала загружаем prefs =====
     LaunchedEffect(Unit) {
         selectedCourse = prefs.selectedCourse.first()
         selectedGroup = prefs.selectedGroup.first()
         selectedSubgroup = prefs.selectedSubgroup.first()
+        isPrefsLoaded = true
     }
 
-    LaunchedEffect(selectedCourse) {
+    // ===== 2. Теперь загружаем группы и расписание =====
+    LaunchedEffect(isPrefsLoaded, selectedCourse) {
+        if (!isPrefsLoaded) return@LaunchedEffect
+
         try {
             isLoading = true
             val groups = withContext(Dispatchers.IO) {
@@ -114,15 +126,17 @@ fun Screen1(navController: NavController) {
                 selectedSubgroup = subgroupToLoad
                 loadSchedule(context, selectedCourse, groupToLoad, subgroupToLoad)
             } else {
-                isLoading = false
                 errorMessage = "Группы не найдены для курса $selectedCourse"
+                isLoading = false
             }
-        } catch (_: Exception) {
-            isLoading = false
+
+        } catch (e: Exception) {
             errorMessage = "Ошибка загрузки списка групп"
+            isLoading = false
         }
     }
 
+    // ================= UI =================
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -183,17 +197,15 @@ fun Screen1(navController: NavController) {
         Spacer(Modifier.height(12.dp))
 
         when {
-            isLoading -> LoadingState(selectedGroup, selectedSubgroup, currentWeekType)
-            errorMessage != null -> ErrorState(errorMessage!!, selectedGroup, selectedSubgroup) {
+            isLoading -> LoadingState()
+            errorMessage != null -> ErrorState(errorMessage!!) {
                 coroutineScope.launch {
                     selectedGroup?.let {
-                        isLoading = true
-                        errorMessage = null
                         loadSchedule(context, selectedCourse, it, selectedSubgroup)
                     }
                 }
             }
-            schedule.isEmpty() -> EmptyState(selectedGroup, selectedSubgroup, currentWeekType)
+            schedule.isEmpty() -> EmptyState()
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(schedule) { day -> DayScheduleCard(day) }
             }
@@ -206,8 +218,10 @@ fun Screen1(navController: NavController) {
         }
     }
 
+    // ==== Диалоги ====
+
     if (showCourseDialog) CourseDialog(
-        selectedCourse,
+        selected = selectedCourse,
         onSelect = { course ->
             selectedCourse = course
             coroutineScope.launch { prefs.save(course, selectedGroup, selectedSubgroup) }
@@ -217,13 +231,12 @@ fun Screen1(navController: NavController) {
     )
 
     if (showGroupDialog && availableGroups.isNotEmpty()) GroupDialog(
-        availableGroups.keys.toList(),
+        groups = availableGroups.keys.toList(),
         onSelect = { group ->
             selectedGroup = group
             selectedSubgroup = availableGroups[group]?.firstOrNull()
             coroutineScope.launch {
                 prefs.save(selectedCourse, group, selectedSubgroup)
-                isLoading = true
                 loadSchedule(context, selectedCourse, group, selectedSubgroup)
             }
             showGroupDialog = false
@@ -232,13 +245,12 @@ fun Screen1(navController: NavController) {
     )
 
     if (showSubgroupDialog && selectedGroup != null) SubgroupDialog(
-        availableGroups[selectedGroup] ?: emptyList(),
-        selectedGroup!!,
+        subgroups = availableGroups[selectedGroup] ?: emptyList(),
+        groupName = selectedGroup!!,
         onSelect = { subgroup ->
             selectedSubgroup = subgroup
             coroutineScope.launch {
                 prefs.save(selectedCourse, selectedGroup, subgroup)
-                isLoading = true
                 loadSchedule(context, selectedCourse, selectedGroup!!, subgroup)
             }
             showSubgroupDialog = false
@@ -247,7 +259,9 @@ fun Screen1(navController: NavController) {
     )
 }
 
-// === Вспомогательные компоненты ===
+// =============================================
+// Вспомогательные UI-компоненты
+// =============================================
 
 @Composable
 fun SelectionButton(text: String, onClick: () -> Unit) {
@@ -272,8 +286,8 @@ fun CourseDialog(selected: Int, onSelect: (Int) -> Unit, onDismiss: () -> Unit) 
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(4.dp),
-                        onClick = { onSelect(course) }
+                            .padding(4.dp)
+                            .clickable { onSelect(course) }
                     ) {
                         Text("$course курс", modifier = Modifier.padding(16.dp))
                     }
@@ -297,8 +311,8 @@ fun GroupDialog(groups: List<String>, onSelect: (String) -> Unit, onDismiss: () 
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(4.dp),
-                        onClick = { onSelect(group) }
+                            .padding(4.dp)
+                            .clickable { onSelect(group) }
                     ) {
                         Text(group, modifier = Modifier.padding(16.dp))
                     }
@@ -322,8 +336,8 @@ fun SubgroupDialog(subgroups: List<String>, groupName: String, onSelect: (String
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(4.dp),
-                        onClick = { onSelect(subgroup) }
+                            .padding(4.dp)
+                            .clickable { onSelect(subgroup) }
                     ) {
                         Text(subgroup, modifier = Modifier.padding(16.dp))
                     }
@@ -337,34 +351,7 @@ fun SubgroupDialog(subgroups: List<String>, groupName: String, onSelect: (String
 }
 
 @Composable
-fun DayScheduleCard(day: ScheduleDay) {
-    val holidayName = HolidayUtils.getHolidayName(DateUtils.getDateForDay(day.dayName))
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(4.dp)
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Text(day.dayName, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(12.dp))
-            when {
-                holidayName != null -> {
-                    Text(holidayName, color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold)
-                    Text("Праздничный день 🎉", color = Color.Gray)
-                }
-                day.lessons.isEmpty() -> Text("Пар нет", color = Color.Gray)
-                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    day.lessons.forEach { LessonItem(it) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun LoadingState(group: String?, subgroup: String?, weekType: String) {
+fun LoadingState() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -373,12 +360,12 @@ fun LoadingState(group: String?, subgroup: String?, weekType: String) {
     ) {
         CircularProgressIndicator()
         Spacer(Modifier.height(16.dp))
-        Text(text = "Загружаем расписание...", color = Color.Gray)
+        Text("Загружаем расписание...", color = Color.Gray)
     }
 }
 
 @Composable
-fun ErrorState(message: String, group: String?, subgroup: String?, onRetry: () -> Unit) {
+fun ErrorState(message: String, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -394,7 +381,7 @@ fun ErrorState(message: String, group: String?, subgroup: String?, onRetry: () -
 }
 
 @Composable
-fun EmptyState(group: String?, subgroup: String?, weekType: String) {
+fun EmptyState() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -404,10 +391,38 @@ fun EmptyState(group: String?, subgroup: String?, weekType: String) {
         Text("Нет занятий 📚", color = Color.Gray, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Для выбранной группы и недели расписание отсутствует",
+            text = "Для выбранной группы расписание отсутствует",
             color = Color.Gray,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+fun DayScheduleCard(day: ScheduleDay) {
+    val holidayName = HolidayUtils.getHolidayName(DateUtils.getDateForDay(day.dayName))
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(day.dayName, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(12.dp))
+
+            when {
+                holidayName != null -> {
+                    Text(holidayName, color = Color(0xFFD32F2F), fontWeight = FontWeight.Bold)
+                    Text("Праздничный день 🎉", color = Color.Gray)
+                }
+                day.lessons.isEmpty() -> Text("Пар нет", color = Color.Gray)
+                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    day.lessons.forEach { LessonItem(it) }
+                }
+            }
+        }
     }
 }
 

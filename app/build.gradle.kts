@@ -108,13 +108,11 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp)
-    implementation(libs.okhttp.logging)
 
     // Image loading
     implementation(libs.coil)
-    implementation(libs.coil.svg)
 
-    // Excel parsing - ОСТАВЛЯЕМ POI
+    // Excel parsing
     implementation("org.apache.poi:poi:5.2.4")
     implementation("org.apache.poi:poi-ooxml:5.2.4")
 
@@ -127,9 +125,6 @@ dependencies {
     // JSON
     implementation("com.google.code.gson:gson:2.13.2")
 
-    // UI Compatibility
-    implementation(libs.appcompat)
-    implementation(libs.material)
 
     // WorkManager
     implementation(libs.work.runtime.ktx)
