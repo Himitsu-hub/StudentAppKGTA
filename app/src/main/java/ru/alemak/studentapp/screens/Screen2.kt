@@ -1,11 +1,14 @@
 package ru.alemak.studentapp.screens
 
+import android.Manifest
 import android.app.*
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,20 +35,46 @@ import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 import java.util.*
-import kotlin.random.Random
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.Info
 
 @Composable
 fun Screen2(navController: NavController) {
     val context = LocalContext.current
     var reminders by remember { mutableStateOf(emptyList<Reminder>()) }
 
+    // Запрос разрешения для уведомлений (Android 13+)
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Log.d("Permission", "✅ Разрешение на уведомления получено")
+        } else {
+            Log.w("Permission", "⚠️ Разрешение на уведомления отклонено")
+            // Показываем сообщение пользователю
+            showPermissionWarning(context)
+        }
+    }
+
     LaunchedEffect(Unit) {
         RemindersManager.load(context)
         reminders = RemindersManager.reminders.toList()
+
+        // Автоматически запрашиваем разрешение при входе в экран
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Проверяем, есть ли уже разрешение
+            val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            if (!hasPermission) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
     var showEditorDialog by remember { mutableStateOf<Reminder?>(null) }
@@ -73,9 +102,40 @@ fun Screen2(navController: NavController) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
+        // Предупреждение о разрешениях
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasNotificationPermission = remember(reminders) {
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            }
+
+            if (!hasNotificationPermission) {
+                WarningCard {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+        }
+
         Box(modifier = Modifier.fillMaxWidth()) {
             FloatingActionButton(
                 onClick = {
+                    // Проверяем разрешение перед созданием напоминания
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                        if (!hasPermission) {
+                            showPermissionWarning(context)
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            return@FloatingActionButton
+                        }
+                    }
+
                     showEditorDialog = Reminder(
                         id = UUID.randomUUID().toString(),
                         text = "",
@@ -159,6 +219,49 @@ fun Screen2(navController: NavController) {
                 showCompletionDialog = null
             }
         )
+    }
+}
+
+@Composable
+fun WarningCard(onRequestPermission: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)),
+        border = BorderStroke(1.dp, Color(0xFFFFEAA7))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "Предупреждение",
+                tint = Color(0xFF856404),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Разрешение на уведомления",
+                    color = Color(0xFF856404),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Text(
+                    "Для работы напоминаний нужно разрешение",
+                    color = Color(0xFF856404),
+                    fontSize = 12.sp
+                )
+            }
+            TextButton(
+                onClick = onRequestPermission,
+                colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF856404))
+            ) {
+                Text("Разрешить")
+            }
+        }
     }
 }
 
@@ -338,17 +441,23 @@ fun ReminderEditorDialog(
                                     0
                                 )
                             }
-                            val reminderDate = if (cal.time.time <= System.currentTimeMillis())
+
+                            // ДЛЯ ТЕСТА: установите на 30 секунд вперед
+                            val reminderDate = if (cal.time.time <= System.currentTimeMillis()) {
                                 Date(System.currentTimeMillis() + 60_000)
-                            else
+                            } else {
                                 cal.time
+                            }
+
+                            // РАСКОММЕНТИРУЙТЕ ДЛЯ ТЕСТА (30 секунд):
+                            val testReminderDate = Date(System.currentTimeMillis() + 30_000)
 
                             if (reminderText.isNotBlank()) {
                                 onSave(
                                     Reminder(
                                         id = reminder.id,
                                         text = reminderText,
-                                        dateTime = reminderDate
+                                        dateTime = testReminderDate // Используем тестовое время
                                     )
                                 )
                             }
@@ -364,17 +473,28 @@ fun ReminderEditorDialog(
 }
 
 /* ────────────────────────────────
-        УВЕДОМЛЕНИЯ
+        УВЕДОМЛЕНИЯ - ИСПРАВЛЕННЫЙ КОД
    ──────────────────────────────── */
 
 private fun scheduleReminderAlarm(context: Context, reminder: Reminder) {
     createNotificationChannel(context)
-    val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+
+    // УБЕДИТЕСЬ что время в будущем
+    if (reminder.dateTime.time <= System.currentTimeMillis()) {
+        Log.e("Reminder", "❌ Время напоминания в прошлом!")
+        return
+    }
+
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+    // ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ Receiver
     val intent = Intent(context, ReminderReceiver::class.java).apply {
         putExtra("text", reminder.text)
         putExtra("reminderId", reminder.id)
         data = "reminder://${reminder.id}".toUri()
+        action = "REMINDER_ACTION_${reminder.id}" // Уникальное действие
     }
+
     val pendingIntent = PendingIntent.getBroadcast(
         context,
         reminder.id.hashCode(),
@@ -382,73 +502,85 @@ private fun scheduleReminderAlarm(context: Context, reminder: Reminder) {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (alarmManager.canScheduleExactAlarms()) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.dateTime.time, pendingIntent)
+    // ОТЛАДКА
+    Log.d("Reminder", "=== УСТАНОВКА НАПОМИНАНИЯ ===")
+    Log.d("Reminder", "Текст: ${reminder.text}")
+    Log.d("Reminder", "Время: ${reminder.dateTime}")
+    Log.d("Reminder", "ID: ${reminder.id}")
+    Log.d("Reminder", "Текущее время: ${Date()}")
+    Log.d("Reminder", "Разница: ${reminder.dateTime.time - System.currentTimeMillis()} мс")
+
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                reminder.dateTime.time,
+                pendingIntent
+            )
+            Log.d("Reminder", "✅ Точное напоминание установлено")
         } else {
-            // fallback: обычный set
-            alarmManager.set(AlarmManager.RTC_WAKEUP, reminder.dateTime.time, pendingIntent)
+            alarmManager.setExact(
+                AlarmManager.RTC_WAKEUP,
+                reminder.dateTime.time,
+                pendingIntent
+            )
+            Log.d("Reminder", "✅ Напоминание установлено")
         }
-    } else {
-        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.dateTime.time, pendingIntent)
+    } catch (e: SecurityException) {
+        Log.e("Reminder", "❌ ОШИБКА: Нет разрешения на установку будильника")
+        e.printStackTrace()
+    } catch (e: Exception) {
+        Log.e("Reminder", "❌ Ошибка: ${e.message}")
+        e.printStackTrace()
     }
 }
 
 private fun cancelReminderAlarm(context: Context, reminder: Reminder) {
-    val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val intent = Intent(context, ReminderReceiver::class.java).apply {
+        data = "reminder://${reminder.id}".toUri()
+        action = "REMINDER_ACTION_${reminder.id}"
+    }
+
     val pendingIntent = PendingIntent.getBroadcast(
         context,
         reminder.id.hashCode(),
-        Intent(context, ReminderReceiver::class.java).apply { data = "reminder://${reminder.id}".toUri() },
+        intent,
         PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
     )
+
     pendingIntent?.let {
         alarmManager.cancel(it)
         it.cancel()
+        Log.d("Reminder", "🗑️ Напоминание отменено: ${reminder.text}")
     }
 }
 
 private fun createNotificationChannel(context: Context) {
-    val manager = context.getSystemService(NotificationManager::class.java) ?: return
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            "reminders",
-            "Напоминания",
-            NotificationManager.IMPORTANCE_HIGH
-        )
-        manager.createNotificationChannel(channel)
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        try {
+            val channel = NotificationChannel(
+                "reminders",
+                "Напоминания",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Канал для напоминаний"
+                enableLights(true)
+                enableVibration(true)
+            }
+            manager.createNotificationChannel(channel)
+            Log.d("Reminder", "✅ Канал уведомлений создан")
+        } catch (e: Exception) {
+            Log.d("Reminder", "ℹ️ Канал уже существует")
+        }
     }
 }
 
-class ReminderReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context?, intent: Intent?) {
-        if (context == null || intent == null) return
-        val text = intent.getStringExtra("text") ?: "Напоминание"
-        val reminderId = intent.getStringExtra("reminderId")
-        val notificationId = reminderId?.hashCode() ?: Random.nextInt()
-
-        if (Build.VERSION.SDK_INT >= 33 &&
-            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED
-        ) return
-
-        val openIntent = Intent(context, Class.forName("${context.packageName}.MainActivity")).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, openIntent, PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(context, "reminders")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Напоминание")
-            .setContentText(text)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
-
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
-    }
+private fun showPermissionWarning(context: Context) {
+    Toast.makeText(
+        context,
+        "Разрешите уведомления для работы напоминаний",
+        Toast.LENGTH_LONG
+    ).show()
 }
