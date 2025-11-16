@@ -31,14 +31,14 @@ data class Reminder(
 
 /**
  * Менеджер для работы с напоминаниями.
- * Напоминания сохраняются в JSON-файл в internal storage.
+ * Сохраняет список в JSON в internal storage.
  */
 object RemindersManager {
     private val gson = Gson()
     private var _reminders: MutableList<Reminder> = mutableListOf()
     private const val FILE_NAME = "reminders.json"
 
-    /** Публичный доступ только для чтения */
+    /** Публичный доступ — только чтение */
     val reminders: List<Reminder>
         get() = _reminders
 
@@ -48,13 +48,17 @@ object RemindersManager {
     fun load(context: Context) {
         try {
             val file = File(context.filesDir, FILE_NAME)
-            if (file.exists()) {
-                val json = file.readText()
-                val type = object : TypeToken<MutableList<Reminder>>() {}.type
-                _reminders = gson.fromJson(json, type) ?: mutableListOf()
-            } else {
+
+            if (!file.exists()) {
                 _reminders = mutableListOf()
+                return
             }
+
+            val json = file.readText()
+            val type = object : TypeToken<MutableList<Reminder>>() {}.type
+
+            _reminders = gson.fromJson(json, type) ?: mutableListOf()
+
         } catch (e: Exception) {
             e.printStackTrace()
             _reminders = mutableListOf()
@@ -62,7 +66,7 @@ object RemindersManager {
     }
 
     /**
-     * Сохраняет текущий список напоминаний в файл.
+     * Сохраняет список напоминаний.
      */
     private fun save(context: Context) {
         try {
@@ -74,7 +78,7 @@ object RemindersManager {
     }
 
     /**
-     * Добавляет новое напоминание и сохраняет изменения.
+     * Добавляет новое напоминание.
      */
     fun addReminder(context: Context, reminder: Reminder) {
         _reminders.add(reminder)
@@ -82,7 +86,18 @@ object RemindersManager {
     }
 
     /**
-     * Удаляет напоминание по ID и сохраняет изменения.
+     * Обновляет существующее напоминание по ID.
+     */
+    fun updateReminder(context: Context, updated: Reminder) {
+        val index = _reminders.indexOfFirst { it.id == updated.id }
+        if (index != -1) {
+            _reminders[index] = updated
+            save(context)
+        }
+    }
+
+    /**
+     * Удаляет напоминание по ID.
      */
     fun deleteReminder(context: Context, id: String) {
         _reminders.removeAll { it.id == id }
@@ -90,7 +105,7 @@ object RemindersManager {
     }
 
     /**
-     * Очищает все напоминания (опционально, для тестов).
+     * Полная очистка (не используется, но полезно для тестов).
      */
     fun clear(context: Context) {
         _reminders.clear()

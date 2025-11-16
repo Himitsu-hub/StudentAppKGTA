@@ -1,7 +1,6 @@
 package ru.alemak.studentapp.screens
 
 import android.content.Context
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,7 +27,6 @@ import ru.alemak.studentapp.parsing.Lesson
 import ru.alemak.studentapp.parsing.ScheduleDay
 import ru.alemak.studentapp.utils.DateUtils
 import ru.alemak.studentapp.screens.HolidayUtils
-
 
 // === DataStore ===
 import androidx.datastore.preferences.core.edit
@@ -65,7 +63,6 @@ fun Screen1(navController: NavController) {
     val prefs = remember { SchedulePrefs(context) }
     val coroutineScope = rememberCoroutineScope()
 
-    // Состояния
     var schedule by remember { mutableStateOf<List<ScheduleDay>>(emptyList()) }
     var availableGroups by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var selectedCourse by remember { mutableStateOf(1) }
@@ -80,17 +77,14 @@ fun Screen1(navController: NavController) {
 
     val currentWeekType = remember { DateUtils.getCurrentWeekType() }
 
-    // Универсальная функция загрузки расписания
     val loadSchedule: suspend (Context, Int, String, String?) -> Unit = { ctx, course, group, subgroup ->
         try {
-            Log.d("Screen1", "Загружаем расписание: курс=$course, группа=$group, подгруппа=$subgroup")
             val result = withContext(Dispatchers.IO) {
                 ExcelParser.parseScheduleForGroup(ctx, course, group, subgroup)
             }
             schedule = result
             errorMessage = null
-        } catch (e: Exception) {
-            Log.e("Screen1", "Ошибка загрузки расписания", e)
+        } catch (_: Exception) {
             errorMessage = "Ошибка загрузки расписания"
             schedule = emptyList()
         } finally {
@@ -98,14 +92,12 @@ fun Screen1(navController: NavController) {
         }
     }
 
-    // Загрузка сохраненных данных при первом запуске экрана
     LaunchedEffect(Unit) {
         selectedCourse = prefs.selectedCourse.first()
         selectedGroup = prefs.selectedGroup.first()
         selectedSubgroup = prefs.selectedSubgroup.first()
     }
 
-    // При изменении курса — подгружаем группы
     LaunchedEffect(selectedCourse) {
         try {
             isLoading = true
@@ -125,14 +117,12 @@ fun Screen1(navController: NavController) {
                 isLoading = false
                 errorMessage = "Группы не найдены для курса $selectedCourse"
             }
-        } catch (e: Exception) {
-            Log.e("Screen1", "Ошибка загрузки групп", e)
+        } catch (_: Exception) {
             isLoading = false
             errorMessage = "Ошибка загрузки списка групп"
         }
     }
 
-    // UI
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -172,7 +162,6 @@ fun Screen1(navController: NavController) {
             textAlign = TextAlign.Center
         )
 
-        // Кнопки выбора
         SelectionButton("Курс: $selectedCourse") { showCourseDialog = true }
         SelectionButton(selectedGroup ?: "Выбрать группу") {
             if (availableGroups.isNotEmpty()) showGroupDialog = true
@@ -217,7 +206,6 @@ fun Screen1(navController: NavController) {
         }
     }
 
-    // Диалоги выбора
     if (showCourseDialog) CourseDialog(
         selectedCourse,
         onSelect = { course ->
@@ -374,6 +362,7 @@ fun DayScheduleCard(day: ScheduleDay) {
         }
     }
 }
+
 @Composable
 fun LoadingState(group: String?, subgroup: String?, weekType: String) {
     Column(
@@ -384,20 +373,12 @@ fun LoadingState(group: String?, subgroup: String?, weekType: String) {
     ) {
         CircularProgressIndicator()
         Spacer(Modifier.height(16.dp))
-        Text(
-            text = "Загружаем расписание...",
-            color = Color.Gray
-        )
+        Text(text = "Загружаем расписание...", color = Color.Gray)
     }
 }
 
 @Composable
-fun ErrorState(
-    message: String,
-    group: String?,
-    subgroup: String?,
-    onRetry: () -> Unit
-) {
+fun ErrorState(message: String, group: String?, subgroup: String?, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()

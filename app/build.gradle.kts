@@ -21,77 +21,124 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+        debug {
+            isMinifyEnabled = true  // ← ВКЛЮЧИТЬ!
+            isShrinkResources = true  // ← ВКЛЮЧИТЬ!
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
     }
+
+    // ДОБАВЬТЕ ЭТОТ БЛОК для оптимизации POI:
+    packagingOptions {
+        resources {
+            excludes += listOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/NOTICE",
+                "META-INF/*.md",
+                "META-INF/ASL2.0",
+                "META-INF/INDEX.LIST",
+                "META-INF/NOTICE.txt",
+                "META-INF/NOTICE.md",
+                "readme.html"
+            )
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = "11"
     }
+
     buildFeatures {
         compose = true
     }
 }
 
+
+
 dependencies {
+    // Startup
     implementation("androidx.startup:startup-runtime:1.2.0")
+
+    // Android KTX
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime)
     implementation(libs.activity.compose)
 
+    // Compose
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
-
     implementation(libs.navigation.compose)
 
+    // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.hilt.androidx)
+    ksp(libs.hilt.androidx.compiler)
 
+    // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
+    // Coroutines
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
 
+    // Network
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
 
+    // Image loading
     implementation(libs.coil)
     implementation(libs.coil.svg)
 
-    implementation(libs.hilt.androidx)
-    ksp(libs.hilt.androidx.compiler)
-
-    // Excel parsing
+    // Excel parsing - ОСТАВЛЯЕМ POI
     implementation("org.apache.poi:poi:5.2.4")
     implementation("org.apache.poi:poi-ooxml:5.2.4")
 
-    // Для работы с файлами
-    implementation("androidx.documentfile:documentfile:1.0.1")
+    // File operations
+    implementation("androidx.documentfile:documentfile:1.1.0")
 
+    // Preferences
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
+
+    // JSON
+    implementation("com.google.code.gson:gson:2.13.2")
+
+    // UI Compatibility
+    implementation(libs.appcompat)
+    implementation(libs.material)
+
+    // WorkManager
+    implementation(libs.work.runtime.ktx)
+
+    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
-    implementation(libs.appcompat)
-    implementation(libs.material)
-    implementation(libs.work.runtime.ktx)
 
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-    implementation("com.google.code.gson:gson:2.10")
+    // Debug only dependencies
+    debugImplementation(libs.compose.ui.tooling)
 }

@@ -1,8 +1,15 @@
 package ru.alemak.studentapp.screens
 
+import android.app.*
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,29 +30,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
-import ru.alemak.studentapp.screens.RemindersManager
-import ru.alemak.studentapp.screens.Reminder
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 import java.util.*
+import kotlin.random.Random
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.net.toUri
+import androidx.compose.foundation.BorderStroke
 
 @Composable
 fun Screen2(navController: NavController) {
     val context = LocalContext.current
     var reminders by remember { mutableStateOf(emptyList<Reminder>()) }
 
-    // Загружаем сохранённые напоминания при старте
     LaunchedEffect(Unit) {
         RemindersManager.load(context)
-        reminders = RemindersManager.reminders
+        reminders = RemindersManager.reminders.toList()
     }
 
-    var showAddDialog by remember { mutableStateOf(false) }
+    var showEditorDialog by remember { mutableStateOf<Reminder?>(null) }
     var showCompletionDialog by remember { mutableStateOf<Reminder?>(null) }
 
     fun updateReminders() {
-        reminders = RemindersManager.reminders
+        reminders = RemindersManager.reminders.toList()
     }
-
 
     Column(
         modifier = Modifier
@@ -60,14 +68,20 @@ fun Screen2(navController: NavController) {
             color = Color.White,
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(bottom = 20.dp)
+            modifier = Modifier.align(Alignment.CenterHorizontally)
         )
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         Box(modifier = Modifier.fillMaxWidth()) {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
+                onClick = {
+                    showEditorDialog = Reminder(
+                        id = UUID.randomUUID().toString(),
+                        text = "",
+                        dateTime = Date(System.currentTimeMillis() + 60_000)
+                    )
+                },
                 modifier = Modifier.align(Alignment.TopEnd),
                 containerColor = Color.White
             ) {
@@ -83,9 +97,7 @@ fun Screen2(navController: NavController) {
 
         if (reminders.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxSize(),
+                modifier = Modifier.weight(1f).fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Text("Нет напоминаний", color = Color.White, fontSize = 18.sp)
@@ -93,14 +105,13 @@ fun Screen2(navController: NavController) {
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(reminders) { reminder ->
                     ReminderItem(
                         reminder = reminder,
-                        onToggleCompleted = { reminderToComplete ->
-                            showCompletionDialog = reminderToComplete
-                        }
+                        onToggleCompleted = { showCompletionDialog = it },
+                        onEdit = { showEditorDialog = it }
                     )
                 }
             }
@@ -110,34 +121,40 @@ fun Screen2(navController: NavController) {
 
         Button(
             onClick = { navController.navigateUp() },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 50.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 50.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color.White)
         ) {
             Text("Назад", color = BlueKGTA, fontSize = 18.sp)
         }
     }
 
-    // Диалог добавления напоминания
-    if (showAddDialog) {
-        AddReminderDialog(
-            onDismiss = { showAddDialog = false },
-            onAddReminder = { newReminder ->
-                RemindersManager.addReminder(context, newReminder)
+    // Добавление / редактирование
+    showEditorDialog?.let { reminder ->
+        ReminderEditorDialog(
+            reminder = reminder,
+            onDismiss = { showEditorDialog = null },
+            onSave = { updated ->
+                if (RemindersManager.reminders.any { it.id == updated.id }) {
+                    RemindersManager.updateReminder(context, updated)
+                    cancelReminderAlarm(context, updated)
+                } else {
+                    RemindersManager.addReminder(context, updated)
+                }
+                scheduleReminderAlarm(context, updated)
                 updateReminders()
-                showAddDialog = false
+                showEditorDialog = null
             }
         )
     }
 
-    // Диалог завершения напоминания
+    // Завершение
     showCompletionDialog?.let { reminder ->
         CompleteReminderDialog(
             reminder = reminder,
             onDismiss = { showCompletionDialog = null },
-            onConfirmComplete = { reminderToDelete ->
-                RemindersManager.deleteReminder(context, reminderToDelete.id)
+            onConfirmComplete = {
+                RemindersManager.deleteReminder(context, it.id)
+                cancelReminderAlarm(context, it)
                 updateReminders()
                 showCompletionDialog = null
             }
@@ -145,23 +162,23 @@ fun Screen2(navController: NavController) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ReminderItem(
     reminder: Reminder,
-    onToggleCompleted: (Reminder) -> Unit
+    onToggleCompleted: (Reminder) -> Unit,
+    onEdit: (Reminder) -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        shape = RoundedCornerShape(25.dp),
+            .clickable { onEdit(reminder) },
+        shape = RoundedCornerShape(20.dp),
         color = Color.White,
-        shadowElevation = 4.dp
+        shadowElevation = 6.dp
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -170,138 +187,15 @@ fun ReminderItem(
                     .clip(CircleShape)
                     .background(Color.Transparent)
                     .border(2.dp, Color.Gray, CircleShape)
-                    .clickable { onToggleCompleted(reminder) },
-                contentAlignment = Alignment.Center
-            ) {}
+                    .clickable { onToggleCompleted(reminder) }
+            )
 
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = reminder.text,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.Black
-                )
+                Text(reminder.text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = reminder.getFormattedDateTime(),
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun AddReminderDialog(
-    onDismiss: () -> Unit,
-    onAddReminder: (Reminder) -> Unit
-) {
-    var reminderText by remember { mutableStateOf("") }
-    var selectedDate by remember { mutableStateOf(Calendar.getInstance()) }
-    var selectedHour by remember { mutableStateOf(12) }
-    var selectedMinute by remember { mutableStateOf(0) }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = Color.White
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .width(300.dp)
-            ) {
-                Text(
-                    text = "Новое напоминание",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                OutlinedTextField(
-                    value = reminderText,
-                    onValueChange = { reminderText = it },
-                    label = { Text("Текст напоминания") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    singleLine = true
-                )
-
-                Text(
-                    text = "Дата и время:",
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    OutlinedTextField(
-                        value = String.format(
-                            Locale.getDefault(),
-                            "%02d.%02d.%04d",
-                            selectedDate.get(Calendar.DAY_OF_MONTH),
-                            selectedDate.get(Calendar.MONTH) + 1,
-                            selectedDate.get(Calendar.YEAR)
-                        ),
-                        onValueChange = {},
-                        label = { Text("Дата") },
-                        modifier = Modifier.weight(1f),
-                        readOnly = true
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    OutlinedTextField(
-                        value = String.format(Locale.getDefault(), "%02d:%02d", selectedHour, selectedMinute),
-                        onValueChange = {},
-                        label = { Text("Время") },
-                        modifier = Modifier.weight(1f),
-                        readOnly = true
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Отмена")
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            if (reminderText.isNotBlank()) {
-                                val calendar = Calendar.getInstance().apply {
-                                    set(Calendar.YEAR, selectedDate.get(Calendar.YEAR))
-                                    set(Calendar.MONTH, selectedDate.get(Calendar.MONTH))
-                                    set(Calendar.DAY_OF_MONTH, selectedDate.get(Calendar.DAY_OF_MONTH))
-                                    set(Calendar.HOUR_OF_DAY, selectedHour)
-                                    set(Calendar.MINUTE, selectedMinute)
-                                    set(Calendar.SECOND, 0)
-                                }
-
-                                val newReminder = Reminder(
-                                    text = reminderText,
-                                    dateTime = calendar.time
-                                )
-                                onAddReminder(newReminder)
-                            }
-                        },
-                        enabled = reminderText.isNotBlank()
-                    ) {
-                        Text("Добавить")
-                    }
-                }
+                Text(reminder.getFormattedDateTime(), fontSize = 12.sp, color = Color.Gray)
             }
         }
     }
@@ -316,27 +210,245 @@ fun CompleteReminderDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Завершить напоминание?") },
-        text = {
-            Text("Вы уверены, что хотите отметить напоминание \"${reminder.text}\" как выполненное?")
-        },
+        text = { Text("Отметить \"${reminder.text}\" как выполненное?") },
         confirmButton = {
-            Button(
-                onClick = { onConfirmComplete(reminder) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Подтвердить",
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Да, завершить", fontSize = 16.sp)
+            Button(onClick = { onConfirmComplete(reminder) }) {
+                Icon(Icons.Default.Check, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Да")
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Отмена", fontSize = 16.sp)
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
+    )
+}
+
+@Composable
+fun ReminderEditorDialog(
+    reminder: Reminder,
+    onDismiss: () -> Unit,
+    onSave: (Reminder) -> Unit
+) {
+    val isEditing = reminder.text.isNotBlank()
+    val context = LocalContext.current
+
+    var reminderText by remember { mutableStateOf(reminder.text) }
+
+    val calendar = Calendar.getInstance().apply { time = reminder.dateTime }
+
+    var selectedDate by remember { mutableStateOf(calendar) }
+    var selectedHour by remember { mutableStateOf(calendar.get(Calendar.HOUR_OF_DAY)) }
+    var selectedMinute by remember { mutableStateOf(calendar.get(Calendar.MINUTE)) }
+
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                selectedDate.set(year, month, day)
+                showDatePicker = false
+            },
+            selectedDate.get(Calendar.YEAR),
+            selectedDate.get(Calendar.MONTH),
+            selectedDate.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    if (showTimePicker) {
+        TimePickerDialog(
+            context,
+            { _, hour, minute ->
+                selectedHour = hour
+                selectedMinute = minute
+                showTimePicker = false
+            },
+            selectedHour,
+            selectedMinute,
+            true
+        ).show()
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(12.dp), color = Color.White) {
+            Column(modifier = Modifier.padding(16.dp).width(300.dp)) {
+
+                Text(
+                    if (isEditing) "Редактировать напоминание" else "Новое напоминание",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = reminderText,
+                    onValueChange = { reminderText = it },
+                    label = { Text("Текст") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Text("Дата и время", fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(8.dp))
+
+                Row {
+                    Surface(
+                        modifier = Modifier.weight(1f).height(56.dp).clickable { showDatePicker = true },
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color.Gray)
+                    ) {
+                        Box(Modifier.fillMaxSize().padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
+                            Text("%02d.%02d.%04d".format(
+                                selectedDate.get(Calendar.DAY_OF_MONTH),
+                                selectedDate.get(Calendar.MONTH) + 1,
+                                selectedDate.get(Calendar.YEAR)
+                            ))
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        modifier = Modifier.weight(1f).height(56.dp).clickable { showTimePicker = true },
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color.Gray)
+                    ) {
+                        Box(Modifier.fillMaxSize().padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
+                            Text("%02d:%02d".format(selectedHour, selectedMinute))
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Отмена") }
+                    Spacer(Modifier.width(8.dp))
+
+                    Button(
+                        onClick = {
+                            val cal = Calendar.getInstance().apply {
+                                set(
+                                    selectedDate.get(Calendar.YEAR),
+                                    selectedDate.get(Calendar.MONTH),
+                                    selectedDate.get(Calendar.DAY_OF_MONTH),
+                                    selectedHour,
+                                    selectedMinute,
+                                    0
+                                )
+                            }
+                            val reminderDate = if (cal.time.time <= System.currentTimeMillis())
+                                Date(System.currentTimeMillis() + 60_000)
+                            else
+                                cal.time
+
+                            if (reminderText.isNotBlank()) {
+                                onSave(
+                                    Reminder(
+                                        id = reminder.id,
+                                        text = reminderText,
+                                        dateTime = reminderDate
+                                    )
+                                )
+                            }
+                        },
+                        enabled = reminderText.isNotBlank()
+                    ) {
+                        Text(if (isEditing) "Сохранить" else "Добавить")
+                    }
+                }
             }
         }
+    }
+}
+
+/* ────────────────────────────────
+        УВЕДОМЛЕНИЯ
+   ──────────────────────────────── */
+
+private fun scheduleReminderAlarm(context: Context, reminder: Reminder) {
+    createNotificationChannel(context)
+    val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+    val intent = Intent(context, ReminderReceiver::class.java).apply {
+        putExtra("text", reminder.text)
+        putExtra("reminderId", reminder.id)
+        data = "reminder://${reminder.id}".toUri()
+    }
+    val pendingIntent = PendingIntent.getBroadcast(
+        context,
+        reminder.id.hashCode(),
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (alarmManager.canScheduleExactAlarms()) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.dateTime.time, pendingIntent)
+        } else {
+            // fallback: обычный set
+            alarmManager.set(AlarmManager.RTC_WAKEUP, reminder.dateTime.time, pendingIntent)
+        }
+    } else {
+        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.dateTime.time, pendingIntent)
+    }
+}
+
+private fun cancelReminderAlarm(context: Context, reminder: Reminder) {
+    val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+    val pendingIntent = PendingIntent.getBroadcast(
+        context,
+        reminder.id.hashCode(),
+        Intent(context, ReminderReceiver::class.java).apply { data = "reminder://${reminder.id}".toUri() },
+        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+    )
+    pendingIntent?.let {
+        alarmManager.cancel(it)
+        it.cancel()
+    }
+}
+
+private fun createNotificationChannel(context: Context) {
+    val manager = context.getSystemService(NotificationManager::class.java) ?: return
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel = NotificationChannel(
+            "reminders",
+            "Напоминания",
+            NotificationManager.IMPORTANCE_HIGH
+        )
+        manager.createNotificationChannel(channel)
+    }
+}
+
+class ReminderReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+        if (context == null || intent == null) return
+        val text = intent.getStringExtra("text") ?: "Напоминание"
+        val reminderId = intent.getStringExtra("reminderId")
+        val notificationId = reminderId?.hashCode() ?: Random.nextInt()
+
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) return
+
+        val openIntent = Intent(context, Class.forName("${context.packageName}.MainActivity")).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, openIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, "reminders")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Напоминание")
+            .setContentText(text)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
+    }
 }

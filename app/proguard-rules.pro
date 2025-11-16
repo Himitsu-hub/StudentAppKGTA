@@ -1,21 +1,51 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Основные правила приложения
+-keep class ru.alemak.studentapp.** { *; }
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# AndroidX
+-keep class androidx.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Compose
+-keep class androidx.compose.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Hilt
+-keep class dagger.hilt.** { *; }
+-keep class * extends dagger.hilt.android.HiltAndroidApp
+
+# Room
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+
+# Библиотеки
+-keep class com.google.gson.** { *; }
+-keep class retrofit2.** { *; }
+-keep class okhttp3.** { *; }
+-keep class coil.** { *; }
+
+# Apache POI
+-keep class org.apache.poi.** { *; }
+-keep class org.apache.xmlbeans.** { *; }
+
+# Kotlin
+-keep class kotlin.** { *; }
+
+# Универсальные правила для распространенных проблем
+-keep class * implements org.xml.sax.EntityResolver
+-keep class * implements java.io.Serializable
+
+# Игнорировать ВСЕ предупреждения о missing classes
+-dontwarn **
+
+# Сохранять аннотации и метаданные
+-keepattributes Signature, InnerClasses, EnclosingMethod, Exceptions
+-keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
+-keepattributes AnnotationDefault
+
+# Для сериализации
+-keepclasseswithmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# Для Retrofit
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
