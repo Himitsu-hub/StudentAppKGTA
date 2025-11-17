@@ -9,137 +9,219 @@ import java.io.InputStream
 
 object ExcelParser {
 
+    // ============================================================
+    // PUBLIC API
+    // ============================================================
+
     fun getAvailableGroupsWithSubgroups(context: Context, course: Int): Map<String, List<String>> {
         return try {
-            val fileName = "schedule${course}.xlsx"
-            context.assets.open(fileName).use { inputStream ->
-                getGroupsWithSubgroupsFromExcel(inputStream, course)
+            val file = "schedule${course}.xlsx"
+            context.assets.open(file).use { stream ->
+                val workbook = WorkbookFactory.create(stream)
+                val sheet = workbook.getSheetAt(0)
+                val groups = parseGroupsFromHeader(sheet)
+                workbook.close()
+
+                groups.mapValues { (_, info) -> info.subgroups.map { it.name } }
             }
         } catch (e: Exception) {
             emptyMap()
         }
     }
 
-    fun parseScheduleForGroup(context: Context, course: Int, groupName: String, subgroup: String? = null): List<ScheduleDay> {
+    fun parseScheduleForGroup(
+        context: Context,
+        course: Int,
+        groupName: String,
+        subgroup: String?
+    ): List<ScheduleDay> {
         return try {
-            val fileName = "schedule${course}.xlsx"
-            context.assets.open(fileName).use { inputStream ->
-                parseExcelFileForGroup(inputStream, groupName, subgroup)
+            val file = "schedule${course}.xlsx"
+            context.assets.open(file).use { input ->
+                parseExcelForGroup(input, groupName, subgroup)
             }
         } catch (e: Exception) {
             emptyList()
         }
     }
 
-    private fun getGroupsWithSubgroupsFromExcel(inputStream: InputStream, course: Int): Map<String, List<String>> {
+    // ============================================================
+    // GROUP HEADER PARSING — НОВЫЙ КОРРЕКТНЫЙ АЛГОРИТМ
+    // ============================================================
+
+    data class GroupInfo(
+        val groupName: String,
+        val subgroups: MutableList<SubgroupInfo>
+    )
+
+    data class SubgroupInfo(
+        val name: String,
+        val column: Int
+    )
+
+    private val allowedPrefixes = listOf("И", "У", "П", "ЭТ")
+
+    private fun getCellTextSafe(sheet: Sheet, row: Int, col: Int): String? {
+        val cell = sheet.getRow(row)?.getCell(col)
+        return cell?.toString()?.trim()?.ifBlank { null }
+    }
+
+    /** Распознаём имя группы по строгим правилам */
+    private fun extractGroupName(text: String?): String? {
+        if (text.isNullOrBlank()) return null
+        val cleaned = text.trim().uppercase()
+
+        for (prefix in allowedPrefixes) {
+            if (cleaned.startsWith(prefix)) {
+                return cleaned.substringBefore("(").trim()
+            }
+        }
+        return null
+    }
+
+    /** Подгруппа определяется ТОЛЬКО из строки 4 */
+    private fun extractSubgroupFromRow4(text: String?): String? {
+        if (text.isNullOrBlank()) return null
+
+        val lower = text.lowercase().trim()
+
+        Regex("(\\d) ?подгруппа").find(lower)?.let {
+            return "${it.groupValues[1]} подгруппа"
+        }
+
+        // явный "осн" мы теперь НЕ используем, чтобы не добавлять "Основная", если есть другие подгруппы
+        return null
+    }
+
+    private fun parseGroupsFromHeader(sheet: Sheet): Map<String, GroupInfo> {
+
+        val groups = mutableMapOf<String, GroupInfo>()
+
+        val merged = collectMergedCells(sheet)
+        val row3 = sheet.getRow(2) ?: return emptyMap()
+        val lastCol = row3.lastCellNum.toInt()
+
+        for (col in 0 until lastCol) {
+
+            val t3 = getCellTextSafe(sheet, 2, col)
+            val t4 = getCellTextSafe(sheet, 3, col)
+
+            // 1 — ищем группу по текущей колонке
+            var groupName = extractGroupName(t3)
+
+            // 2 — если в этой колонке нет группы — проверяем объединённую ячейку
+            if (groupName == null) {
+                val merge = findMerge(merged, 2, col)
+                if (merge != null && merge.firstRow == 2) {
+                    val mergedText = getCellTextSafe(sheet, merge.firstRow, merge.firstColumn)
+                    groupName = extractGroupName(mergedText)
+                }
+            }
+
+            // Если не группа — пропускаем
+            if (groupName == null) continue
+
+            // Получаем реальный диапазон колонок группы (учитываем merged)
+            val merge = findMerge(merged, 2, col)
+            val startCol = merge?.firstColumn ?: col
+            val endCol = merge?.lastColumn ?: col
+
+            // Если группа впервые — создаём
+            val groupInfo = groups.getOrPut(groupName) {
+                GroupInfo(groupName, mutableListOf())
+            }
+
+            // 3 — перебираем ВСЕ столбцы внутри группы и ищем явные подгруппы в строке 4
+            val foundSubgroups = mutableListOf<Pair<String, Int>>() // name, column
+            for (c in startCol..endCol) {
+                val subText = getCellTextSafe(sheet, 3, c)
+                val subgroup = extractSubgroupFromRow4(subText)
+                if (subgroup != null) {
+                    // сохраняем порядок слева направо
+                    if (foundSubgroups.none { it.first == subgroup }) {
+                        foundSubgroups.add(subgroup to c)
+                    }
+                }
+            }
+
+            // 4a — если явные подгруппы найдены — добавляем только их (без "Основная")
+            if (foundSubgroups.isNotEmpty()) {
+                for ((name, c) in foundSubgroups) {
+                    if (groupInfo.subgroups.none { it.name == name }) {
+                        groupInfo.subgroups.add(SubgroupInfo(name, c))
+                    }
+                }
+            } else {
+                // 4b — если явных подгрупп нет — fallback: добавляем одну "1 подгруппа" на первую колонку диапазона
+                val fallbackName = "1 подгруппа"
+                if (groupInfo.subgroups.none { it.name == fallbackName }) {
+                    groupInfo.subgroups.add(SubgroupInfo(fallbackName, startCol))
+                }
+            }
+        }
+
+        return groups
+    }
+
+
+    // ============================================================
+    // SCHEDULE PARSING
+    // ============================================================
+
+    private fun parseExcelForGroup(
+        inputStream: InputStream,
+        groupName: String,
+        subgroup: String?
+    ): List<ScheduleDay> {
+
         val workbook = WorkbookFactory.create(inputStream)
         val sheet = workbook.getSheetAt(0)
-        val groupsMap = mutableMapOf<String, MutableList<String>>()
 
-        val courseSuffix = when (course) {
-            1 -> "125"
-            2 -> "124"
-            3 -> "123"
-            4 -> "122"
-            else -> "124"
-        }
+        val groups = parseGroupsFromHeader(sheet)
+        val info = groups[groupName] ?: return emptyList()
 
-        val groupsRow = sheet.getRow(2) ?: return emptyMap()
-        val groupRanges = mapOf(
-            "И-$courseSuffix" to (13..15),
-            "У-$courseSuffix" to (21..25),
-            "П-$courseSuffix" to (29..30),
-            "ЭТ-$courseSuffix" to (31..32)
-        )
+        val subgroupColumn =
+            info.subgroups.find { it.name == subgroup }?.column
+                ?: info.subgroups.first().column
 
-        groupRanges.forEach { (group, _) ->
-            groupsMap[group] = mutableListOf()
-            when {
-                group.startsWith("И-") -> groupsMap[group]?.addAll(listOf("1 подгруппа", "2 подгруппа"))
-                else -> groupsMap[group]?.addAll(listOf("Основная", "3 подгруппа"))
-            }
-        }
+        val merged = collectMergedCells(sheet)
+        val result = parseDays(sheet, subgroupColumn, merged)
 
         workbook.close()
-        return groupsMap
+        return result
     }
 
-    private fun parseExcelFileForGroup(inputStream: InputStream, groupName: String, subgroup: String?): List<ScheduleDay> {
-        val workbook = WorkbookFactory.create(inputStream)
-        val sheet = workbook.getSheetAt(0)
-        val mergedCellsInfo = findMergedCellsForGroup(sheet, groupName)
-        val groupColumn = findGroupColumn(sheet, groupName, subgroup)
-        if (groupColumn == -1) {
-            workbook.close()
-            return emptyList()
-        }
-        val scheduleDays = parseScheduleWithMerges(sheet, groupName, subgroup, groupColumn, mergedCellsInfo)
-        workbook.close()
-        return scheduleDays
-    }
 
-    private fun findMergedCellsForGroup(sheet: Sheet, groupName: String): List<MergedCellInfo> {
-        val mergedCells = mutableListOf<MergedCellInfo>()
-        val groupColumns = when {
-            groupName.startsWith("И-") -> (13..15).toList()
-            groupName.startsWith("У-") -> (21..25).toList()
-            groupName.startsWith("П-") -> (29..30).toList()
-            groupName.startsWith("ЭТ-") -> (31..32).toList()
-            else -> emptyList()
-        }
+    // ============================================================
+    // MERGED REGIONS
+    // ============================================================
 
-        if (groupColumns.isEmpty()) return mergedCells
-
-        for (mergedRegion in sheet.mergedRegions) {
-            val intersectsWithGroup = groupColumns.any { col ->
-                col >= mergedRegion.firstColumn && col <= mergedRegion.lastColumn
-            }
-            if (intersectsWithGroup) {
-                mergedCells.add(
-                    MergedCellInfo(
-                        firstRow = mergedRegion.firstRow,
-                        lastRow = mergedRegion.lastRow,
-                        firstColumn = mergedRegion.firstColumn,
-                        lastColumn = mergedRegion.lastColumn,
-                        rowCount = mergedRegion.lastRow - mergedRegion.firstRow + 1,
-                        colCount = mergedRegion.lastColumn - mergedRegion.firstColumn + 1
-                    )
-                )
-            }
-        }
-        return mergedCells
-    }
-
-    data class MergedCellInfo(
+    data class MergeInfo(
         val firstRow: Int,
         val lastRow: Int,
         val firstColumn: Int,
-        val lastColumn: Int,
-        val rowCount: Int,
-        val colCount: Int
+        val lastColumn: Int
     )
 
-    private fun findGroupColumn(sheet: Sheet, groupName: String, subgroup: String?): Int {
-        return when {
-            groupName.startsWith("И-") -> if (subgroup?.contains("2") == true) 15 else 13
-            groupName.startsWith("У-") -> if (subgroup?.contains("3") == true) 25 else 21
-            groupName.startsWith("П-") -> if (subgroup?.contains("3") == true) 30 else 29
-            groupName.startsWith("ЭТ-") -> if (subgroup?.contains("3") == true) 32 else 31
-            else -> -1
+    private fun collectMergedCells(sheet: Sheet): List<MergeInfo> {
+        return sheet.mergedRegions.map {
+            MergeInfo(it.firstRow, it.lastRow, it.firstColumn, it.lastColumn)
         }
     }
 
-    private fun parseScheduleWithMerges(
-        sheet: Sheet,
-        groupName: String,
-        subgroup: String?,
-        groupColumn: Int,
-        mergedCellsInfo: List<MergedCellInfo>
-    ): List<ScheduleDay> {
-        val scheduleDays = mutableListOf<ScheduleDay>()
-        val currentWeekType = getCurrentWeekType()
-        val LAST_SCHEDULE_ROW = 84
+    private fun findMerge(merged: List<MergeInfo>, row: Int, col: Int): MergeInfo? {
+        return merged.find {
+            row in it.firstRow..it.lastRow &&
+                    col in it.firstColumn..it.lastColumn
+        }
+    }
 
+
+    // ============================================================
+    // DAY & LESSON PARSING
+    // ============================================================
+
+    private fun parseDays(sheet: Sheet, column: Int, merged: List<MergeInfo>): List<ScheduleDay> {
         val days = listOf(
             "Понедельник" to 4,
             "Вторник" to 18,
@@ -149,229 +231,111 @@ object ExcelParser {
             "Суббота" to 74
         )
 
-        days.forEach { (dayName, startRow) ->
-            if (startRow > LAST_SCHEDULE_ROW) return@forEach
-            val dayDate = DateUtils.getDateForDay(dayName)
+        val weekType = DateUtils.getCurrentWeekType()
+        val LAST = 84
 
-            if (HolidayUtils.isHoliday(dayDate)) {
-                val holidayName = HolidayUtils.getHolidayName(dayDate) ?: "Праздничный день"
-                scheduleDays.add(
-                    ScheduleDay(
-                        dayName,
-                        listOf(
-                            Lesson(
-                                time = "",
-                                subject = holidayName,
-                                teacher = "",
-                                room = "",
-                                type = "праздник"
-                            )
-                        )
-                    )
-                )
-                return@forEach
+        val result = mutableListOf<ScheduleDay>()
+
+        for ((dayName, startRow) in days) {
+
+            if (startRow > LAST) break
+
+            val date = DateUtils.getDateForDay(dayName)
+            if (HolidayUtils.isHoliday(date)) {
+                val h = HolidayUtils.getHolidayName(date) ?: "Праздничный день"
+                result.add(ScheduleDay(dayName, listOf(Lesson("", h, "", "", "праздник"))))
+                continue
             }
 
-            val allLessons = parseLessonsForDayWithMerges(
-                sheet,
-                startRow,
-                groupColumn,
-                groupName,
-                subgroup,
-                currentWeekType,
-                mergedCellsInfo
-            )
-
-            val lessons = allLessons.filterIndexed { index, _ ->
-                val rowForPair = startRow + index * 2
-                rowForPair <= LAST_SCHEDULE_ROW
-            }
-
+            val lessons = parseLessonsForDay(sheet, startRow, column, weekType, merged)
             if (lessons.isNotEmpty()) {
-                scheduleDays.add(ScheduleDay(dayName, lessons))
+                result.add(ScheduleDay(dayName, lessons))
             }
         }
 
-        return scheduleDays
+        return result
     }
 
-    private fun getColumnsForSubgroup(groupName: String, subgroup: String?): Pair<Int, Int> {
-        return when {
-            groupName.startsWith("И-") -> if (subgroup?.contains("2") == true) 15 to 15 else 13 to 14
-            groupName.startsWith("У-") -> if (subgroup?.contains("3") == true) 25 to 25 else 21 to 22
-            groupName.startsWith("П-") -> if (subgroup?.contains("3") == true) 30 to 30 else 29 to 29
-            groupName.startsWith("ЭТ-") -> if (subgroup?.contains("3") == true) 32 to 32 else 31 to 31
-            else -> 13 to 14
-        }
-    }
-
-    private fun parseLessonsForDayWithMerges(
+    private fun parseLessonsForDay(
         sheet: Sheet,
         startRow: Int,
-        groupColumn: Int,
-        groupName: String,
-        subgroup: String?,
-        currentWeekType: String,
-        mergedCellsInfo: List<MergedCellInfo>
+        column: Int,
+        weekType: String,
+        merged: List<MergeInfo>
     ): List<Lesson> {
-        val lessons = mutableListOf<Lesson>()
-        val (numeratorColumn, denominatorColumn) = getColumnsForSubgroup(groupName, subgroup)
-        val LAST_SCHEDULE_ROW = 84
 
-        for (pairIndex in 0..6) {
-            val numeratorRowNum = startRow + pairIndex * 2
-            val denominatorRowNum = numeratorRowNum + 1
+        val list = mutableListOf<Lesson>()
+        val LAST = 84
 
-            if (numeratorRowNum > LAST_SCHEDULE_ROW || denominatorRowNum > LAST_SCHEDULE_ROW) break
+        for (i in 0..6) {
+            val numRow = startRow + i * 2
+            val denRow = numRow + 1
+            if (denRow > LAST) break
 
-            val pairNumber = pairIndex + 1
-            val time = getTimeByPairNumber(pairNumber.toString())
-            val selectedColumn = if (currentWeekType == "Числитель") numeratorColumn else denominatorColumn
+            val time = getTimeByPair(i + 1)
+            val selectedRow = if (weekType == "Числитель") numRow else denRow
+            val text = getText(sheet, selectedRow, column, merged)
 
-            val lesson = parseLessonWithMerges(
-                sheet,
-                numeratorRowNum,
-                denominatorRowNum,
-                selectedColumn,
-                groupName,
-                subgroup,
-                currentWeekType,
-                time,
-                mergedCellsInfo
-            )
-
-            if (lesson != null) lessons.add(lesson)
-        }
-
-        return lessons
-    }
-
-    private fun parseLessonWithMerges(
-        sheet: Sheet,
-        numeratorRowNum: Int,
-        denominatorRowNum: Int,
-        groupColumn: Int,
-        groupName: String,
-        subgroup: String?,
-        currentWeekType: String,
-        time: String,
-        mergedCellsInfo: List<MergedCellInfo>
-    ): Lesson? {
-        val numeratorText = getCellText(sheet, numeratorRowNum, groupColumn)
-        val denominatorText = getCellText(sheet, denominatorRowNum, groupColumn)
-
-        val numeratorMergeInfo = findMergeInfoForCell(mergedCellsInfo, numeratorRowNum, groupColumn)
-        val denominatorMergeInfo = findMergeInfoForCell(mergedCellsInfo, denominatorRowNum, groupColumn)
-
-        val hasHorizontalMerge = mergedCellsInfo.any { merge ->
-            numeratorRowNum in merge.firstRow..merge.lastRow &&
-                    denominatorRowNum in merge.firstRow..merge.lastRow &&
-                    merge.firstColumn <= 13 && merge.lastColumn >= 15
-        }
-
-        if (hasHorizontalMerge) {
-            val text = if (currentWeekType == "Числитель") numeratorText ?: denominatorText else denominatorText ?: numeratorText
-            return text?.let { parseLessonFromText(it, time) }
-        }
-
-        if (numeratorMergeInfo?.isVertical() == true || denominatorMergeInfo?.isVertical() == true) {
-            val text = numeratorText ?: denominatorText
-            return text?.let { parseLessonFromText(it, time) }
-        }
-
-        var text = if (currentWeekType == "Числитель") numeratorText else denominatorText
-
-        if (subgroup?.contains("1") == true && currentWeekType == "Знаменатель" && text.isNullOrBlank()) {
-            val altText = getCellText(sheet, denominatorRowNum, 13)
-            if (!altText.isNullOrBlank()) text = altText
-        }
-
-        if (text.isNullOrBlank()) return null
-        return parseLessonFromText(text, time)
-    }
-
-    private fun findMergeInfoForCell(mergedCellsInfo: List<MergedCellInfo>, row: Int, column: Int): MergedCellInfo? {
-        return mergedCellsInfo.find { merge ->
-            row in merge.firstRow..merge.lastRow && column in merge.firstColumn..merge.lastColumn
-        }
-    }
-
-    private fun MergedCellInfo.isVertical(): Boolean = rowCount >= 2
-
-    private fun getCellText(sheet: Sheet, rowNum: Int, colNum: Int): String? {
-        val row = sheet.getRow(rowNum) ?: return null
-        val cell = row.getCell(colNum)
-        var text = cell?.toString()?.trim()
-        if (!text.isNullOrEmpty() && text != "null" && text != "-" && text != " ") return text
-
-        for (region in sheet.mergedRegions) {
-            if (rowNum in region.firstRow..region.lastRow && colNum in region.firstColumn..region.lastColumn) {
-                val topLeftCell = sheet.getRow(region.firstRow)?.getCell(region.firstColumn)
-                text = topLeftCell?.toString()?.trim()
-                if (!text.isNullOrEmpty() && text != "null" && text != "-") return text
+            if (!text.isNullOrBlank()) {
+                parseLessonText(text, time)?.let { list.add(it) }
             }
         }
-        return null
+
+        return list
     }
 
-    private fun parseLessonFromText(text: String, time: String): Lesson? {
-        var subject = text
+    private fun getText(sheet: Sheet, row: Int, col: Int, merged: List<MergeInfo>): String? {
+        val raw = getCellTextSafe(sheet, row, col)
+        if (!raw.isNullOrBlank() && raw != "-" && raw != "null") return raw
+
+        val merge = findMerge(merged, row, col) ?: return null
+        val topLeft = getCellTextSafe(sheet, merge.firstRow, merge.firstColumn)
+
+        return if (!topLeft.isNullOrBlank() && topLeft != "-" && topLeft != "null")
+            topLeft else null
+    }
+
+    private fun parseLessonText(text: String, time: String): Lesson? {
+        val lines = text.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+        if (lines.isEmpty()) return null
+
+        var subject = cleanSubject(lines[0])
         var teacher = ""
         var room = ""
-        var type = "занятие"
-
-        try {
-            type = when {
-                text.containsAny("лек", "лекция") -> "лекция"
-                text.containsAny("практ", "практика") -> "практика"
-                text.containsAny("лаб", "лабораторная") -> "лабораторная"
-                else -> "занятие"
-            }
-
-            val lines = text.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-            if (lines.isNotEmpty()) {
-                subject = lines[0]
-                for (i in lines.size - 1 downTo 0) {
-                    val roomMatch = Regex("\\d+").find(lines[i])
-                    if (roomMatch != null) {
-                        room = roomMatch.value
-                        teacher = lines.subList(1, i).joinToString(", ")
-                        break
-                    }
-                }
-                if (room.isEmpty() && lines.size > 1) teacher = lines.subList(1, lines.size).joinToString(", ")
-            }
-
-            subject = cleanSubject(subject)
-            return Lesson(time, subject, teacher, room, type)
-        } catch (e: Exception) {
-            return null
+        var type = when {
+            text.contains("лек", ignoreCase = true) -> "лекция"
+            text.contains("практ", ignoreCase = true) -> "практика"
+            text.contains("лаб", ignoreCase = true) -> "лабораторная"
+            else -> "занятие"
         }
+
+        for (i in lines.lastIndex downTo 1) {
+            if (Regex("\\d+").containsMatchIn(lines[i])) {
+                room = Regex("\\d+").find(lines[i])!!.value
+                teacher = lines.subList(1, i).joinToString(", ")
+                break
+            }
+        }
+
+        return Lesson(time, subject, teacher, room, type)
     }
 
-    private fun cleanSubject(subject: String): String {
-        return subject.replace("лекция", "", ignoreCase = true)
-            .replace("лек", "", ignoreCase = true)
-            .replace("практика", "", ignoreCase = true)
-            .replace("практ", "", ignoreCase = true)
-            .replace("лабораторная", "", ignoreCase = true)
-            .replace("лаб", "", ignoreCase = true)
-            .replace("  ", " ")
+    private fun cleanSubject(s: String): String =
+        s.replace("лекция", "", true)
+            .replace("лек", "", true)
+            .replace("практика", "", true)
+            .replace("практ", "", true)
+            .replace("лаб", "", true)
             .trim()
-    }
 
-    private fun getTimeByPairNumber(pairNumber: String) = when (pairNumber) {
-        "1" -> "8:00-09:25"
-        "2" -> "09:35-11:00"
-        "3" -> "12:00-13:25"
-        "4" -> "13:35-15:00"
-        "5" -> "15:10-16:35"
-        "6" -> "17:45-19:10"
-        "7" -> "19:20-20:45"
+    private fun getTimeByPair(pair: Int) = when (pair) {
+        1 -> "8:00-09:25"
+        2 -> "09:35-11:00"
+        3 -> "12:00-13:25"
+        4 -> "13:35-15:00"
+        5 -> "15:10-16:35"
+        6 -> "17:45-19:10"
+        7 -> "19:20-20:45"
         else -> "Неизвестно"
     }
-
-    fun getCurrentWeekType(): String = DateUtils.getCurrentWeekType()
-
-    private fun String.containsAny(vararg strings: String) = strings.any { this.contains(it, ignoreCase = true) }
 }
