@@ -26,8 +26,7 @@ import kotlinx.coroutines.withContext
 import ru.alemak.studentapp.parsing.ExcelParser
 import ru.alemak.studentapp.parsing.Lesson
 import ru.alemak.studentapp.parsing.ScheduleDay
-import ru.alemak.studentapp.utils.DateUtils
-import ru.alemak.studentapp.screens.HolidayUtils
+import ru.alemak.studentapp.parsing.DateUtils
 
 // === DataStore ===
 import androidx.datastore.preferences.core.edit

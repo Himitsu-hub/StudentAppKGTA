@@ -1,4 +1,4 @@
-package ru.alemak.studentapp.utils
+package ru.alemak.studentapp.parsing
 
 import java.util.*
 
@@ -40,7 +40,7 @@ object DateUtils {
             set(Calendar.MILLISECOND, 0)
         }
 
-        
+
         val semesterStart = when {
             current.after(secondSemesterStart) -> secondSemesterStart
             else -> firstSemesterStart

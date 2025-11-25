@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 import ru.alemak.studentapp.R
 import ru.alemak.studentapp.parsing.ExcelParser
 import ru.alemak.studentapp.ui.theme.BlueKGTA
-import ru.alemak.studentapp.utils.DateUtils
+import ru.alemak.studentapp.parsing.DateUtils
 import java.text.SimpleDateFormat
 import java.util.*
 
