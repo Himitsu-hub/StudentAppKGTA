@@ -3,19 +3,16 @@ package ru.alemak.studentapp.utils
 import java.util.*
 
 object DateUtils {
+
+    private const val FIRST_SEMESTER_YEAR = 2025
+    private const val FIRST_SEMESTER_MONTH = Calendar.SEPTEMBER
+    private const val FIRST_SEMESTER_DAY = 1
+
+    private const val SECOND_SEMESTER_YEAR = 2026
+    private const val SECOND_SEMESTER_MONTH = Calendar.JANUARY
+    private const val SECOND_SEMESTER_DAY = 13
+
     fun getCurrentWeekType(): String {
-        val calendar = Calendar.getInstance()
-
-        val startOfSemester = Calendar.getInstance().apply {
-            set(Calendar.YEAR, 2024)
-            set(Calendar.MONTH, Calendar.SEPTEMBER)
-            set(Calendar.DAY_OF_MONTH, 2)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-
         val current = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -23,7 +20,33 @@ object DateUtils {
             set(Calendar.MILLISECOND, 0)
         }
 
-        val diffInMillis = current.timeInMillis - startOfSemester.timeInMillis
+        val firstSemesterStart = Calendar.getInstance().apply {
+            set(Calendar.YEAR, FIRST_SEMESTER_YEAR)
+            set(Calendar.MONTH, FIRST_SEMESTER_MONTH)
+            set(Calendar.DAY_OF_MONTH, FIRST_SEMESTER_DAY)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        val secondSemesterStart = Calendar.getInstance().apply {
+            set(Calendar.YEAR, SECOND_SEMESTER_YEAR)
+            set(Calendar.MONTH, SECOND_SEMESTER_MONTH)
+            set(Calendar.DAY_OF_MONTH, SECOND_SEMESTER_DAY)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        
+        val semesterStart = when {
+            current.after(secondSemesterStart) -> secondSemesterStart
+            else -> firstSemesterStart
+        }
+
+        val diffInMillis = current.timeInMillis - semesterStart.timeInMillis
         val weeksDiff = (diffInMillis / (7 * 24 * 60 * 60 * 1000)).toInt()
 
         return if (weeksDiff % 2 == 0) "Числитель" else "Знаменатель"
@@ -51,16 +74,10 @@ object DateUtils {
         )
 
         val calendar = Calendar.getInstance()
-
-        // Устанавливаем календарь на начало текущей недели (понедельник)
         calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-
-        // Получаем нужный день
         val targetDay = dayMap[dayName] ?: Calendar.MONDAY
         calendar.set(Calendar.DAY_OF_WEEK, targetDay)
 
         return calendar.time
     }
-
-
 }

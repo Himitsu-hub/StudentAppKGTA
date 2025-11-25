@@ -9,9 +9,6 @@ import java.io.InputStream
 
 object ExcelParser {
 
-    // ============================================================
-    // PUBLIC API
-    // ============================================================
 
     fun getAvailableGroupsWithSubgroups(context: Context, course: Int): Map<String, List<String>> {
         return try {
@@ -164,9 +161,6 @@ object ExcelParser {
     }
 
 
-    // ============================================================
-    // SCHEDULE PARSING
-    // ============================================================
 
     private fun parseExcelForGroup(
         inputStream: InputStream,
@@ -192,10 +186,6 @@ object ExcelParser {
     }
 
 
-    // ============================================================
-    // MERGED REGIONS
-    // ============================================================
-
     data class MergeInfo(
         val firstRow: Int,
         val lastRow: Int,
@@ -217,9 +207,6 @@ object ExcelParser {
     }
 
 
-    // ============================================================
-    // DAY & LESSON PARSING
-    // ============================================================
 
     private fun parseDays(sheet: Sheet, column: Int, merged: List<MergeInfo>): List<ScheduleDay> {
         val days = listOf(

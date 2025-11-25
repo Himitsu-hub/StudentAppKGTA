@@ -28,7 +28,7 @@ import ru.alemak.studentapp.ui.theme.BlueKGTA
 fun Screen3(navController: NavController) {
     var searchText by remember { mutableStateOf("") }
     val teachers = listOf(
-        Teacher("Егоров Алексей Васильевчи", "Ректор", R.drawable.rector),
+        Teacher("Егоров Алексей Васильевич", "Ректор", R.drawable.rector),
         Teacher("Демьянова Елена Владимировна", "Молодёжная политика", R.drawable.molodej_politics),
         Teacher("Антонова Мария Евгеньевна", "Директор ЭМК", R.drawable.director_emk),
         Teacher("Митрофанов Андрей Анатольевич", "Декан АиЭ", R.drawable.aie_dekan),
