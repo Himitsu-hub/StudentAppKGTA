@@ -1,51 +1,39 @@
-# Основные правила приложения
--keep class ru.alemak.studentapp.** { *; }
+# Gson / models
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
 
-# AndroidX
--keep class androidx.** { *; }
+-keepclassmembers,allowobfuscation class * {
+  @com.google.gson.annotations.SerializedName <fields>;
+}
 
-# Compose
--keep class androidx.compose.** { *; }
+-keep class ru.alemak.studentapp.data.model.** { *; }
+-keep class ru.alemak.studentapp.data.remote.** { *; }
+-keep class ru.alemak.studentapp.data.local.** { *; }
 
-# Hilt
--keep class dagger.hilt.** { *; }
--keep class * extends dagger.hilt.android.HiltAndroidApp
+# Retrofit
+-keep,allowobfuscation,allowshrinking interface retrofit2.Call
+-keep,allowobfuscation,allowshrinking class retrofit2.Response
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
+
+# OkHttp
+-dontwarn okhttp3.**
+-dontwarn okio.**
 
 # Room
 -keep class * extends androidx.room.RoomDatabase
 -keep @androidx.room.Entity class *
+-dontwarn androidx.room.paging.**
 
-# Библиотеки
--keep class com.google.gson.** { *; }
--keep class retrofit2.** { *; }
--keep class okhttp3.** { *; }
--keep class coil.** { *; }
+# Hilt
+-dontwarn dagger.hilt.**
+-keep class dagger.hilt.** { *; }
+-keep class javax.inject.** { *; }
+-keep class * extends dagger.hilt.android.internal.managers.ViewComponentManager$FragmentContextWrapper { *; }
 
-# Apache POI
--keep class org.apache.poi.** { *; }
--keep class org.apache.xmlbeans.** { *; }
-
-# Kotlin
--keep class kotlin.** { *; }
-
-# Универсальные правила для распространенных проблем
--keep class * implements org.xml.sax.EntityResolver
--keep class * implements java.io.Serializable
-
-# Игнорировать ВСЕ предупреждения о missing classes
--dontwarn **
-
-# Сохранять аннотации и метаданные
--keepattributes Signature, InnerClasses, EnclosingMethod, Exceptions
--keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
--keepattributes AnnotationDefault
-
-# Для сериализации
--keepclasseswithmembers class * {
-    @com.google.gson.annotations.SerializedName <fields>;
-}
-
-# Для Retrofit
--keepclasseswithmembers class * {
-    @retrofit2.http.* <methods>;
-}
+# Coroutines
+-dontwarn kotlinx.coroutines.**

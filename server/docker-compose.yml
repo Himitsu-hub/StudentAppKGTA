@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  schedule-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./schedule.db:/app/schedule.db
+      - ./teachers.json:/app/teachers.json
+      - ./news_cache.json:/app/news_cache.json
+    env_file:
+      - .env
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./schedule.db}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

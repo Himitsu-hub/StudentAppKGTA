@@ -1,0 +1,1318 @@
+[
+  {
+    "name": "Спирин Роман Вячеславович",
+    "profile_url": "/spirin-roman-vyacheslavovich",
+    "photo_url": "https://dksta.ru/thumb/2/V_OM65w25cdscheLZF1hmA/300r/d/spirin_krug.jpg",
+    "position": "заведующий кафедрой «Машиностроение»,главный конструктор направления \"Стрелково- пушечное вооружение\", ОАО «Завод им. В.А. Дегтярева».",
+    "email": "r.spirin@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Александров Александр Юрьевич",
+    "profile_url": "/aleksandrov-aleksandr-yuryevich",
+    "photo_url": "https://dksta.ru/thumb/2/IObT57j44ImJjYLOout4ag/r/d/aleks1.jpg",
+    "position": "Профессор кафедры «Машиностроение»,Начальник военно-патриотического центра им.Г.С.Шпагина.",
+    "email": "alexandrov@dksta.ru",
+    "subjects": [
+      "Жизненный цикл изделий",
+      "Теоретические основы производства СПВ",
+      "Теоретические основы производства РО",
+      "Технология производства СПВ",
+      "Технология производства РО",
+      "Прогрессивные методы получения заготовок РО",
+      "Прогрессивные методы получения заготовок СПВ",
+      "Проектирование оснастки для СПВ",
+      "Проектирование оснастки для РО."
+    ]
+  },
+  {
+    "name": "Бодров Дмитрий Алексеевич",
+    "profile_url": "/bodrov-dmitriy-alekseyevich",
+    "photo_url": "https://dksta.ru/thumb/2/llvM-Q7e-kLHvFpI5mn8Kg/r/d/bodrov1.jpg",
+    "position": "старший преподаватель кафедры",
+    "email": "bodrov@dksta.ru",
+    "subjects": [
+      "Автоматика СПВ",
+      "Инженерное программирование",
+      "Конструкции СПВ",
+      "Проектирование стволов и затворов",
+      "Основы проектирования СПВ",
+      "Проектирование СПВ",
+      "Пусковые установки ЛА",
+      "Системотехническое проектирование ракетного и ствольного оружия",
+      "Системы охлаждения стволов",
+      "Спец.приборы СПВ",
+      "Физические основы устройства оружия"
+    ]
+  },
+  {
+    "name": "Гурьев Александр Иванович",
+    "profile_url": "/guryev-aleksandr-ivanovich",
+    "photo_url": "https://dksta.ru/thumb/2/uelhfrgHyNwJummycqa8yw/r/d/guryev_1.jpg",
+    "position": "доцент кафедры",
+    "email": "gurev@dksta.ru",
+    "subjects": [
+      "Внешняя баллистика и аэродинамика",
+      "Конструкция и компоновка ЛА",
+      "Конструкторско-технологическая документация",
+      "Проектирование РО",
+      "Боевые части ракет",
+      "Проектирование СББ",
+      "Проектирование РО",
+      "Основы проектирования РО",
+      "Проектирование и производство снарядов и гранат"
+    ]
+  },
+  {
+    "name": "Моисеев Александр Николаевич",
+    "profile_url": "/moiseyev-aleksandr-nikolayevich",
+    "photo_url": "https://dksta.ru/thumb/2/LynG3JIEO4SXUxPsSI72nQ/r/d/prepod_kopiya.jpg",
+    "position": "доцент кафедры",
+    "email": "moiseev@dksta.ru",
+    "subjects": [
+      "САПР РО и СББ/Эскизирование изделий РО",
+      "САПР СПВ/Эскизирование изделий. СПВ",
+      "Введение в специальность",
+      "САПР ТП РО и СББ/Деталирование изделий РО",
+      "САПР ТП СПВ/Деталирование изделий СПВ",
+      "Защита интеллектуальной собственности"
+    ]
+  },
+  {
+    "name": "Тюрин Александр Васильевич",
+    "profile_url": "/tyurin-aleksandr-vasilyevich",
+    "photo_url": "https://dksta.ru/thumb/2/7mso-CwcTXj1UutF5g03bw/r/d/tyurin1.jpg",
+    "position": "доцент кафедры",
+    "email": "turin@dksta.ru",
+    "subjects": [
+      "Прикладная газовая динамика",
+      "Проектирование газовых устройств",
+      "Установки СПВ",
+      "Проектирование патронов",
+      "Основы теплотехники",
+      "Технологическая практика",
+      "Конструкторская практика",
+      "Преддипломная практика."
+    ]
+  },
+  {
+    "name": "Шеманаева Людмила Ивановна",
+    "profile_url": "/shemanayeva-lyudmila-ivanovna",
+    "photo_url": "https://dksta.ru/d/shemanaeva_krug.jpg",
+    "position": "доцент кафедры",
+    "email": "shemanaeva@dksta.ru",
+    "subjects": [
+      "Численные методы в задачах теплопроводности/Теория горении и взрыва;",
+      "Метод конечных элементов в технике/Численные методы в механике де-формируемого твердого тела;",
+      "Внутренняя баллистика РО и СББ;",
+      "Внутренняя баллистика ствольного оружия;",
+      "Эргономика;",
+      "Эксплуатация СПВ/Стрелковая тактика;",
+      "Эксплуатация РО и СББ/Укупорка, маркировка и транспортировка РО и СББ;",
+      "Основы технического эксперимента;",
+      "Проектирование двигателей ЛА;",
+      "Численные методы в мех газов/Базы данных;",
+      "Специальные материалы и покрытия СПВ/ Испытания СПВ;;",
+      "Численные методы решения инженерных задач;",
+      "Специальные приборы СББ/ Испытания РО"
+    ]
+  },
+  {
+    "name": "Кокорин Алексей Михайлович",
+    "profile_url": "/kokorin-aleksey-mikhaylovich",
+    "photo_url": "https://dksta.ru/thumb/2/QWfPSIOq5K5MHInmSgcq7Q/180r160/d/kokorin_krug.jpg",
+    "position": "Заведующий кафедрой безопасности жизнедеятельности,экологии и химии",
+    "email": "kokorinam@dksta.ru",
+    "subjects": [
+      "Экология",
+      "Физиология человека",
+      "Токсикология",
+      "Медико-биологические основы безопасности",
+      "Производственная санитария",
+      "Управление техносферной безопасностью",
+      "БЖД",
+      "Анатомия ЦНС",
+      "Физиология ВНД",
+      "Антропология",
+      "Возрастная анатомия и физиология",
+      "Химия",
+      "Органическая химия"
+    ]
+  },
+  {
+    "name": "Ларионов Александр Сергеевич",
+    "profile_url": "/larionov-aleksandr-sergeyevich",
+    "photo_url": "https://dksta.ru/thumb/2/sllpUfvCsJvycSqghHL_CQ/180r160/d/larionov_krug.jpg",
+    "position": "Доцент",
+    "email": "larionov@dksta.ru",
+    "subjects": [
+      "Безопасность жизнедеятельности",
+      "Надежность технических систем и техногенный риск",
+      "Системы обеспечения промышленной безопасности"
+    ]
+  },
+  {
+    "name": "Трифонов Константин Иванович",
+    "profile_url": "/trifonov-konstantin-ivanovich",
+    "photo_url": "https://dksta.ru/thumb/2/bFbxztnh967ovPfwN3xRKw/180r160/d/trifonov_krug.jpg",
+    "position": "профессор кафедры",
+    "email": "trifonovki@dksta.ru",
+    "subjects": [
+      "Химия",
+      "Химмотология",
+      "Системы защиты среды обитания",
+      "Физико-химические процессы в техносфере",
+      "Технологии производственных циклов"
+    ]
+  },
+  {
+    "name": "Шварёва Ирина Станиславовна",
+    "profile_url": "/shvareva-irina-stanislavovna",
+    "photo_url": "https://dksta.ru/thumb/2/dGblAGyoqV9MUYF-TUaomA/180r160/d/shvareva_krug.jpg",
+    "position": "ДоцентНачальник отдела довузовской подготовки и профориентации,Руководитель Центра инновационного развития школьников,Ответственный секретарь Приёмной комиссии",
+    "email": "shvareva@dksta.ru",
+    "subjects": [
+      "Химия",
+      "Экология",
+      "Мониторинг окружающей среды",
+      "Спецкурс по химии",
+      "Надзор и контроль в техносфере",
+      "Химмотология"
+    ]
+  },
+  {
+    "name": "Гончаренко Сергей Иванович",
+    "profile_url": "/goncharenko-sergey-ivanovich",
+    "photo_url": "https://dksta.ru/thumb/2/CcFLTLddOXD2qDgjuFwU6A/r/d/prepod_vaavapa_kopiya.jpg",
+    "position": "доцент",
+    "email": "goncharenkosi@dksta.ru",
+    "subjects": [
+      "Физическая культура и спорт"
+    ]
+  },
+  {
+    "name": "Ерёмкина Елена Владимировна",
+    "profile_url": "/yeremkina-yelena-vladimirovna",
+    "photo_url": "https://dksta.ru/thumb/2/RMUjFhydRDtF-26q1PQ_Hg/r/d/prepod_kprrrrrpopiya.jpg",
+    "position": "Старший преподавательЗаместитель декана Механико-технологического факультета",
+    "email": "e.eremkina@dksta.ru",
+    "subjects": [
+      "Физическая культура и спорт"
+    ]
+  },
+  {
+    "name": "Королёва Наталья Николаевна",
+    "profile_url": "/koroleva-natalya-nikolayevna",
+    "photo_url": "https://dksta.ru/thumb/2/m37w18Cekt35YiPBX-_UGg/r/d/prepod_koppapaprriya.jpg",
+    "position": "Старший преподаватель кафедры",
+    "email": "korolevann@dksta.ru",
+    "subjects": [
+      "Физическая культура и спорт"
+    ]
+  },
+  {
+    "name": "Путинцева Наталья Дмитриевна",
+    "profile_url": "/putinceva-natalya-dmitrievna",
+    "photo_url": "",
+    "position": "Старший преподаватель",
+    "email": "n.putinceva@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Холмин Алексей Алексеевич",
+    "profile_url": "/kholmin-aleksey-alekseyevich",
+    "photo_url": "https://dksta.ru/thumb/2/rl8_BHfrtXpp8q_S4CwBjA/r/d/prepod_vypaprchchkopiya.jpg",
+    "position": "Старший преподаватель",
+    "email": "holminaa@dksta.ru",
+    "subjects": [
+      "Физическая культура и спорт"
+    ]
+  },
+  {
+    "name": "Кузнецов Николай Александрович",
+    "profile_url": "/kuznetsov-nikolay-aleksandrovich",
+    "photo_url": "https://dksta.ru/thumb/2/ves8SPSPt3Eaq8mxaH066A/180r160/d/kuznecov_na.jpg",
+    "position": "Заведующий кафедры «Гидропневмоавтоматика и гидропривод»доцент кафедры",
+    "email": "nrms@dksta.ru",
+    "subjects": [
+      "Физика;",
+      "Экспериментальная физика;",
+      "Физические свойства рабочих жидкостей;",
+      "Физические свойства металлов и сплавов;",
+      "Устройства непрерывного дискретного преобразования сигналов;",
+      "Основы медицинской акустики"
+    ]
+  },
+  {
+    "name": "Косорукова Ольга Владимировна",
+    "profile_url": "/kosorukova-olga-vladimirovna",
+    "photo_url": "https://dksta.ru/thumb/2/CHk2mpyv77RK4Hf6ZCDO-g/r/d/kosorukovaa.jpg",
+    "position": "Заведующий кафедры «Гидропневмоавтоматика и гидропривод»;доцент кафедры",
+    "email": "kosorukova@dksta.ru",
+    "subjects": [
+      "Теория автоматического управления",
+      "Управление в технических системах",
+      "Проектирование гидропневмоприводов и систем",
+      "Основы трибологии",
+      "Триботехника"
+    ]
+  },
+  {
+    "name": "Алиев Андрей Рафаилович",
+    "profile_url": "/aliev-andrej-rafailovich",
+    "photo_url": "https://dksta.ru/thumb/2/Y8y4gv8E9RlKNLIwNwiDaQ/360r300/d/aliev_krug.jpg",
+    "position": "доцент кафедры гидропневмоавтоматики и гидропривода",
+    "email": "aliev@dksta.ru",
+    "subjects": [
+      "Основы моделирования гидравлических и пневматических систем;",
+      "Основы автоматизированного проектирования;",
+      "Автоматизация испытаний гидроприводов;",
+      "Методы и средства испытаний пневматических агрегатов и систем"
+    ]
+  },
+  {
+    "name": "Даршт Яков Адольфович",
+    "profile_url": "/darsht-yakov-adolfovich",
+    "photo_url": "https://dksta.ru/thumb/2/gIwvILivlMufpuLATjbJ4A/r/d/daaarsht.jpg",
+    "position": "профессор кафедры",
+    "email": "darsht@dksta.ru",
+    "subjects": [
+      "Гидропривод и средства автоматики",
+      "Пневмопривод и средства автоматики",
+      "Компьютерные технологии в машиностроении",
+      "Математические методы в инженерии"
+    ]
+  },
+  {
+    "name": "Ермаков Владимир Игоревич",
+    "profile_url": "/ermakov-vladimir-igorevich",
+    "photo_url": "https://dksta.ru/d/ermakov_vi.jpg",
+    "position": "",
+    "email": ""
+  },
+  {
+    "name": "Козлова Светлана Николаевна",
+    "profile_url": "/kozlova-svetlana-nikolayevna",
+    "photo_url": "https://dksta.ru/thumb/2/55Orts37gj5Kj2HW4TRz5Q/180r180/d/kozlova_sn_krug.jpg",
+    "position": "доцент кафедры",
+    "email": "kozlovasn@dksta.ru",
+    "subjects": [
+      "Механика",
+      "Теория механизмов и машин",
+      "Детали машин и основы конструирования",
+      "Детали машин"
+    ]
+  },
+  {
+    "name": "Овчинников Николай Александрович",
+    "profile_url": "/ovchinnikov-nikolay-aleksandrovich",
+    "photo_url": "https://dksta.ru/thumb/2/I_E0UoTFUj8pyc8uYn31BA/r/d/ovchinnikoov.jpg",
+    "position": "доценткафедры",
+    "email": "ovchinikov@dksta.ru",
+    "subjects": [
+      "Термодинамика и теплообмен",
+      "Механика жидкости и газа",
+      "Теплофизика",
+      "Гидрогазодинамика",
+      "Основы теории подобия",
+      "Основы энергосбережения в гидравлической технике и другие."
+    ]
+  },
+  {
+    "name": "Пузанов Андрей Викторович",
+    "profile_url": "/puzanov-andrey-viktorovich",
+    "photo_url": "https://dksta.ru/thumb/2/ffAVGmkw9gNKzrRPo_lpdQ/180r180/d/puzanov_krug.jpg",
+    "position": "доцент кафедры",
+    "email": "puzanov@dksta.ru",
+    "subjects": [
+      "Автоматизация проектирования систем и средств управления",
+      "Автоматизация проектирования информационно-управляющих систем",
+      "Компьютерные технологии в приборостроении",
+      "Конструкторско-технологическое обеспечение, Основы алгоритмизации и программирования",
+      "Основы технологии производства СУ",
+      "Приборное обеспечение процессов контроля и управления",
+      "Производственный контроль изделий",
+      "Руководство ВКР, магистрантами",
+      "Технологическое обеспечение информационно-управляющих систем",
+      "Элементы приборных систем"
+    ]
+  },
+  {
+    "name": "Третьяков Владимир Михайлович",
+    "profile_url": "/tretyakov-vladimir-mikhaylovich",
+    "photo_url": "",
+    "position": "профессор кафедры",
+    "email": "tretyakovvm@dksta.ru",
+    "subjects": [
+      "Теория механизмов и машин"
+    ]
+  },
+  {
+    "name": "Черняков Алексей Александрович",
+    "profile_url": "/chernyakov-aleksej-aleksandrovich",
+    "photo_url": "",
+    "position": "доцент кафедры",
+    "email": "chernyakov@dksta.ru",
+    "subjects": [
+      "Основы конструирования технологических машин",
+      "Основы надежности гидравлических и пневматических машин и агрегатов",
+      "Основы испытаний гидравлических машин и приводов",
+      "Объемные гидравлические машины"
+    ]
+  },
+  {
+    "name": "Шенкман Людмила Владиславовна",
+    "profile_url": "/shenkman-lyudmila-vladislavovna",
+    "photo_url": "https://dksta.ru/thumb/2/VrJ7Hb_vZUPlbSGMzn0qOA/180r180/d/shenkman_krug.jpg",
+    "position": "доцентпредседатель учебно-методической комиссии Механико-технологического  факультета",
+    "email": "shenkmanlv@dksta.ru",
+    "subjects": [
+      "Теоретическая механика",
+      "Механика",
+      "Испытание конструкционных материалов"
+    ]
+  },
+  {
+    "name": "Карпенков Андрей Сергеевич",
+    "profile_url": "/karpenkov-andrey-sergeyevich",
+    "photo_url": "https://dksta.ru/thumb/2/tBdiDlaAd00HIgPz75qO0A/r/d/kaprenkov11.jpg",
+    "position": "заведующий кафедрой робототехники и комплексной автоматизации",
+    "email": "karpenkovas@dksta.ru",
+    "subjects": [
+      "Микропроцессорная техника в мехатронике и РБТ",
+      "Основы мехатроники и робототехники",
+      "Методы искусственного интеллекта",
+      "Программное обеспечение мехатронных  и РБТ систем",
+      "Основы программирования на языке СИ",
+      "Социальная информатика",
+      "Руководство ВКР",
+      "Руководство магистрами (на кафедре ГПА и ГП)"
+    ]
+  },
+  {
+    "name": "Галкин Валерий Иванович",
+    "profile_url": "/galkin-valeriy-ivanovich",
+    "photo_url": "https://dksta.ru/thumb/2/yZNV9mQCrjW-h1zD2MxDlw/r/d/galkin11.jpg",
+    "position": "доцент кафедры",
+    "email": "galkinvi@dksta.ru",
+    "subjects": [
+      "Гироскопические системы стабилизации",
+      "Основы управления манипуляционными роботами",
+      "Руководство ВКР",
+      "Руководство магистрами (на кафедре ГПА и ГП)",
+      "СУД роботов",
+      "Электрические и гидравлические приводы мехатронных и РБТ устройств",
+      "Электронные устройства мехатронных и робототехнических систем"
+    ]
+  },
+  {
+    "name": "Антошина Елена Александровна",
+    "profile_url": "/antoshina-yelena-aleksandrovna",
+    "photo_url": "https://dksta.ru/thumb/2/F7yd8vz4-Ky2RbiQ-UzmEw/r/d/antoshina11.jpg",
+    "position": "Старший преподаватель",
+    "email": "antoshinaea@dksta.ru",
+    "subjects": [
+      "Информационные устройства РТС",
+      "Детали мехатронных модулей роботов и их конструирование",
+      "Моделирование технических систем",
+      "Основы теории надежности",
+      "Основы технологии машиностроения и приборостроения",
+      "Метрология, стандартизация и сертификация",
+      "Конструирование промышленных роботов",
+      "Теория автоматического управления"
+    ]
+  },
+  {
+    "name": "Багаев Дмитрий Викторович",
+    "profile_url": "/bagayev-dmitriy-viktorovich",
+    "photo_url": "https://dksta.ru/d/bagayev1.jpg",
+    "position": "доцент кафедры",
+    "email": "bagaevdv@dksta.ru",
+    "subjects": [
+      "Программирование"
+    ]
+  },
+  {
+    "name": "Воротнёв Павел Викторович",
+    "profile_url": "/vorotnev-pavel-viktorovich",
+    "photo_url": "",
+    "position": "Ассистент преподавателя",
+    "email": "vorotnyov@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Мартынов Олег Владимирович",
+    "profile_url": "/martynov-oleg-vladimirovich",
+    "photo_url": "https://dksta.ru/thumb/2/Rmn7LAsmHDc8VQrTJOrDBA/180r160/d/martynov11.jpg",
+    "position": "доцент кафедры",
+    "email": "mov@dksta.ru",
+    "subjects": [
+      "Алгоритмизация и программирование",
+      "Трехмерное моделирование"
+    ]
+  },
+  {
+    "name": "Панулина Елена Анатольевна",
+    "profile_url": "/panulina-elena-anatolevna",
+    "photo_url": "",
+    "position": "Старший преподаватель кафедры",
+    "email": "panulinaea@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Разбирин Андрей Владимирович",
+    "profile_url": "/razbirin-andrej-vladimirovich",
+    "photo_url": "",
+    "position": "Старший преподаватель кафедры",
+    "email": "razbirin@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Филиппов Сергей Иванович",
+    "profile_url": "/filippov-sergej-ivanovich",
+    "photo_url": "",
+    "position": "доцент кафедры",
+    "email": "filippovsi@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Вяльцев Георгий Михайлович",
+    "profile_url": "/vyalcev-georgij-mihajlovich",
+    "photo_url": "",
+    "position": "Ассистент преподавателя",
+    "email": "rka@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Горшков Игорь Васильевич",
+    "profile_url": "/gorshkov-igor-vasilevich",
+    "photo_url": "",
+    "position": "ассистентАО\"КЭМЗ\":  ведущий инженер-конструктор конструкторского отделапо сопровождению гражданской продукции",
+    "email": "gorshkov@dksta.ru",
+    "subjects": [
+      "Автоматизированные системы управления автомобилей и тракторов",
+      "Испытание автомобилей и тракторов",
+      "Конструкция автоматизированных узлов автомобилей и тракторов",
+      "Конструирование и расчёт автомобильной техники",
+      "Проектирование узлов автомобиля",
+      "Электрооборудование автомобилей и тракторов"
+    ]
+  },
+  {
+    "name": "Грехов Александр Евгеньевич",
+    "profile_url": "/grehov-aleksandr-evgenevich",
+    "photo_url": "",
+    "position": "Ассистент преподавателя,Член ГАК в ЭМК КГТА, специальность «Специальные машины и устройства»",
+    "email": "rka@dksta.ru",
+    "subjects": [
+      "Конструкционные и защитно-отделочные материалы;",
+      "Спец.материалы СПВ"
+    ]
+  },
+  {
+    "name": "Пискарёв Михаил Юрьевич",
+    "profile_url": "/piskarev-mikhail-yuryevich",
+    "photo_url": "https://dksta.ru/d/piskarev11.jpg",
+    "position": "доцент кафедры",
+    "email": "piskarev@dksta.ru",
+    "subjects": [
+      "Основы научных исследований в автомобиле- и тракторостроении",
+      "Теория резания, металлорежущие станки и инструменты",
+      "Технология автомобилестроения",
+      "Теория резания, обрабатывающее станки и инструменты"
+    ]
+  },
+  {
+    "name": "Потапов Сергей Иванович",
+    "profile_url": "/potapov-sergey-ivanovich",
+    "photo_url": "https://dksta.ru/d/potapov1.jpg",
+    "position": "Доцент кафедры",
+    "email": "potapov@dksta.ru",
+    "subjects": [
+      "Теория автомобиля и трактора",
+      "Конструкция автомобиля и трактора",
+      "Технология эксплуатации и ремонта автомобилей и тракторов"
+    ]
+  },
+  {
+    "name": "Рыбакова Марина Викторовна",
+    "profile_url": "/rybakova-marina-viktorovna",
+    "photo_url": "",
+    "position": "Ассистент преподавателя",
+    "email": "rka@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Варабин Денис Александрович",
+    "profile_url": "/varabin-denis-aleksandrovich",
+    "photo_url": "https://dksta.ru/thumb/2/L5OTwZF5XFnnoj9pSPVXnA/180r180/d/varabin_krug.jpg",
+    "position": "Заведующийинтеллектуальных информационных системи комплексов специального назначения;Заместитель генерального директора - руководитель проектов АО   -   \"ВНИИ \"Сигнал\"",
+    "email": "iis-ksn@dksta.ru",
+    "subjects": [
+      "Введение в профессиональную деятельность"
+    ]
+  },
+  {
+    "name": "Мурзина Ольга Викторовна",
+    "profile_url": "/murzina-olga-viktorovna",
+    "photo_url": "https://dksta.ru/thumb/2/XyzW44VUQW__l9XDhG_ocQ/r/d/zolotareva11.jpg",
+    "position": "доцент кафедры",
+    "email": "zoloto@dksta.ru",
+    "subjects": [
+      "Материаловедение",
+      "Технология конструкционных материалов",
+      "Технологические процессы в машиностроении"
+    ]
+  },
+  {
+    "name": "Житников Юрий Захарович",
+    "profile_url": "/zhitnikov-yuriy-zakharovich",
+    "photo_url": "https://dksta.ru/thumb/2/_HgdEZLfjGAQo6o--eY8tQ/r/d/zhitnikov1.jpg",
+    "position": "Профессор кафедры",
+    "email": "zitnikov@dksta.ru",
+    "subjects": [
+      "Математическое моделирование автоматизированного технологического оборудования",
+      "Прочностные расчеты в машиностроении",
+      "Технологическая оснастка",
+      "Автоматизированный контроль качества"
+    ]
+  },
+  {
+    "name": "Крылов Сергей Владимирович",
+    "profile_url": "/krylov-sergej-vladimirovich",
+    "photo_url": "",
+    "position": "Доцент кафедры",
+    "email": "tms@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Максимова Марина Ивановна",
+    "profile_url": "/maksimova-marina-ivanovna",
+    "photo_url": "https://dksta.ru/thumb/2/31oYdFCM74xId9P5I4GQBw/360r300/d/maksimova_krug.jpg",
+    "position": "доцент кафедры",
+    "email": "maksimova@dksta.ru",
+    "subjects": [
+      "Метрология,стандартизация и сертификация",
+      "Нормирование точности"
+    ]
+  },
+  {
+    "name": "Михеенко Алексей Анатольевич",
+    "profile_url": "/miheenko-aleksey-anatoljevich",
+    "photo_url": "",
+    "position": "старший преподаватель кафедры",
+    "email": "miheenko@dksta.ru",
+    "subjects": [
+      "Оборудование машиностроительных производств",
+      "Вспомогательные инструменты автоматизированного производства",
+      "Технологическая оснастка"
+    ]
+  },
+  {
+    "name": "Соколик Наталья Львовна",
+    "profile_url": "/sokolik-natalya-lvovna",
+    "photo_url": "https://dksta.ru/thumb/2/-aX2AAFrTSpd3x0zOJO-gQ/r/d/sokolik11.jpg",
+    "position": "профессор кафедры",
+    "email": "sokolik@dksta.ru",
+    "subjects": [
+      "Режущий инструмент",
+      "Процессы и операции формообразования",
+      "Резание материалов",
+      "Вспомогательные инструменты автоматизированного производства",
+      "Технология машиностроения"
+    ]
+  },
+  {
+    "name": "Котов Владимир Валерьевич",
+    "profile_url": "/kotov-vladimir-valeryevich",
+    "photo_url": "https://dksta.ru/thumb/2/dMc-mnt5NzmvrhDqJLGYdQ/r/d/kotovv1.jpg",
+    "position": "Заведующий кафедрой ПМ и САПР",
+    "email": "kotov@dksta.ru",
+    "subjects": [
+      "Информатика",
+      "ЭВМ и ПУ",
+      "Операционные системы, комплексы и сети",
+      "Разработка САПР",
+      "Информационная безопасность",
+      "Технология разработки ПО",
+      "Разработка и проектирование ПО",
+      "Руководство практиками",
+      "ВКР"
+    ]
+  },
+  {
+    "name": "Белоногов Антон Евгеньевич",
+    "profile_url": "/belonogov-anton-evgenevich",
+    "photo_url": "",
+    "position": "старший преподаватель кафедры",
+    "email": "belonogov@dksta.ru",
+    "subjects": [
+      "Системы электронного документооборота"
+    ]
+  },
+  {
+    "name": "Борисова Ольга Евгеньевна",
+    "profile_url": "/borisova-olga-yevgenyevna",
+    "photo_url": "https://dksta.ru/thumb/2/ucIy-u1GM6am9fnkmqeH_w/180r160/d/borisova_krug.jpg",
+    "position": "старший преподаватель кафедры",
+    "email": "borisova@dksta.ru",
+    "subjects": [
+      "Инженерная и компьютерная графика",
+      "Начертательная геометрия."
+    ]
+  },
+  {
+    "name": "Головина Елена Александровна",
+    "profile_url": "/golovina-elena-aleksandrovna",
+    "photo_url": "https://dksta.ru/d/golovina_krug.jpg",
+    "position": "доцент кафедры",
+    "email": "golovina@dksta.ru",
+    "subjects": [
+      "Системный анализ"
+    ]
+  },
+  {
+    "name": "Зяблицева Ольга Витальевна",
+    "profile_url": "/zyabliceva-olga-vitalevna",
+    "photo_url": "https://dksta.ru/thumb/2/ggEtfyi1GWWb9sFhmkEyaw/360r300/d/zyabliceva_krug_novyj.jpg",
+    "position": "доцент",
+    "email": "zyabliceva@dksta.ru",
+    "subjects": [
+      "Базы данных",
+      "Информатика",
+      "Программирование"
+    ]
+  },
+  {
+    "name": "Котова Ванда Вячеславовна",
+    "profile_url": "/kotova-vanda-vyacheslavovna",
+    "photo_url": "https://dksta.ru/thumb/2/exyOx_WKjyisNGqFObSo8A/180r160/d/kotova_krug.jpg",
+    "position": "старший преподаватель",
+    "email": "kotova@dksta.ru",
+    "subjects": [
+      "Информатика",
+      "Промышленная логистика"
+    ]
+  },
+  {
+    "name": "Леонтьева Виктория Станиславовна",
+    "profile_url": "/leonteva-viktoriya-stanislavovna",
+    "photo_url": "https://dksta.ru/thumb/2/hjaNzTbvg6FZeM-rrlucnw/360r300/d/leonteva_krug.jpg",
+    "position": "Старший преподавательЗаместитель декана факультета Автоматики и электроники",
+    "email": "leon@dksta.ru",
+    "subjects": [
+      "Математика"
+    ]
+  },
+  {
+    "name": "Марихов Иван Николаевич",
+    "profile_url": "/marikhov-ivan-nikolayevich",
+    "photo_url": "https://dksta.ru/thumb/2/1YvjFVncUEWLjmrxLPTdIA/r/d/marikhoov.jpg",
+    "position": "доцент кафедры",
+    "email": "marihov@dksta.ru",
+    "subjects": [
+      "Математика",
+      "Теория вероятности",
+      "Специальная математика",
+      "Операционное исчисление",
+      "Математическая логика и теория алгоритмов",
+      "Математические основы ТАУ",
+      "Методы математического моделирования",
+      "Компьютерная графика",
+      "информационные технологии"
+    ]
+  },
+  {
+    "name": "Можегова Юлия Николаевна",
+    "profile_url": "/mozhegova-yuliya-nikolayevna",
+    "photo_url": "https://dksta.ru/d/mozhegova_krug.jpg",
+    "position": "доцент кафедры,руководитель центра дополнительного образования и профессионального обучения",
+    "email": "mozegova@dksta.ru",
+    "subjects": [
+      "Компьютерная графика",
+      "Информатика",
+      "Системы управления предприятием",
+      "САПР технологических процессов."
+    ]
+  },
+  {
+    "name": "Норсеев Сергей Александрович",
+    "profile_url": "/norseev-sergej-aleksandrovich",
+    "photo_url": "https://dksta.ru/thumb/2/1ojzRpCgIVuAz7Vr1GnhRA/360r300/d/norseev_krug.jpg",
+    "position": "доцент кафедры;инженер-программист 1 категории АО «ВНИИ «Сигнал»",
+    "email": "norseev@dksta.ru",
+    "subjects": [
+      "Информационные технологии",
+      "программирование",
+      "операционные системы",
+      "групповое управление"
+    ]
+  },
+  {
+    "name": "Пронин Сергей Романович",
+    "profile_url": "/pronin-sergey-romanovich",
+    "photo_url": "https://dksta.ru/thumb/2/K5SedorWjQa-zFxu8QlmoA/360r300/d/pronin_krug.jpg",
+    "position": "старший преподаватель кафедры;Руководитель группы сопровождения и администрирования информационных систем",
+    "email": "pronin_sergey@dksta.ru",
+    "subjects": [
+      "Инженерная и компьютерная графика",
+      "Информатика",
+      "Программирование",
+      "Основы САПР",
+      "Разработка и проектирование ПО"
+    ]
+  },
+  {
+    "name": "Симаков Александр Леонидович",
+    "profile_url": "/simakov-aleksandr-leonidovich",
+    "photo_url": "https://dksta.ru/thumb/2/UTutzCpTnOMsBUESkM0Abg/r/d/simakoov1.jpg",
+    "position": "заведующий кафедрой \"Приборостроение\"",
+    "email": "a.simakov@dksta.ru",
+    "subjects": [
+      "Адаптивные системы управления",
+      "Введение в профессиональную деятельность",
+      "Математические основы теории систем",
+      "Оптико-электронные приборы",
+      "Основы автоматического управления",
+      "Приборное обеспечение процессов контроля и управления",
+      "Проектирование систем управления электропневмогидроприводов (магистранты)",
+      "Системы оптимального управления",
+      "Системный подход в решении научно-технических задач (аспиранты)",
+      "Теория автоматического управления"
+    ]
+  },
+  {
+    "name": "Кузнецова Светлана Владимировна",
+    "profile_url": "/kuznetsova-svetlana-vladimirovna",
+    "photo_url": "https://dksta.ru/thumb/2/KcmwbZntsy5JwgCPEkCoXQ/r/d/kuznetsooova1.jpg",
+    "position": "доцент кафедры",
+    "email": "svkyznecova@dksta.ru",
+    "subjects": [
+      "Методы и средства испытаний",
+      "Методы технической диагностики",
+      "Моделирование систем управления",
+      "Планирование эксперимента",
+      "Трехмерное моделирование",
+      "Теория автоматического управления",
+      "Элементы и устройства информационно-управляющих систем"
+    ]
+  },
+  {
+    "name": "Куликов Олег Евгеньевич",
+    "profile_url": "/kulikov-oleg-yevgenyevich",
+    "photo_url": "https://dksta.ru/thumb/2/ItodcTG62YE3MRJEQrDfVw/r/d/kulllikov1.jpg",
+    "position": "доцент кафедры",
+    "email": "oleg.kulikov@dksta.ru",
+    "subjects": [
+      "Методы искусственного интеллекта",
+      "Программно-аппаратные средства систем управления",
+      "Системы автоматизированного проектирования измерительных приборов",
+      "Технические средства автоматизации и управления"
+    ]
+  },
+  {
+    "name": "Матросов Александр Евгеньевич",
+    "profile_url": "/matrosov-aleksandr-yevgenyevich",
+    "photo_url": "https://dksta.ru/thumb/2/DBfAbDioFktxWfNQktQw5Q/180r180/d/matrosov_an_krug.jpg",
+    "position": "доцент кафедры",
+    "email": "matrosov@dksta.ru",
+    "subjects": [
+      "Защита интеллектуальной собственности",
+      "Измерительная техника",
+      "Метрология, стандартизация и сертификация",
+      "Надежность информационно-управляющих систем",
+      "Надежность в приборостроении",
+      "Основы технологии производства систем управления",
+      "Патентоведение",
+      "Теория измерений",
+      "Точность измерительных приборов"
+    ]
+  },
+  {
+    "name": "Рожков Александр Николаевич",
+    "profile_url": "/rozhkov-aleksandr-nikolayevich",
+    "photo_url": "https://dksta.ru/thumb/2/wJtgxyzsM27yKWjPIsl1mw/180r180/d/rozhkov_an_krug.jpg",
+    "position": "Старший преподаватель,заведующий лабораториями",
+    "email": "rozhkin61@dksta.ru",
+    "subjects": [
+      "Автономные информационно-управляющие системы",
+      "Автоматизация процессов контроля и управления",
+      "Приборы и системы контроля доступа",
+      "Приборы  и системы ориентации и навигации",
+      "Производственные информационно-управляющие системы (автоматизированные информационно-управляющие системы)",
+      "Схемотехника измерительных приборов и систем",
+      "Схемотехника систем управления"
+    ]
+  },
+  {
+    "name": "Травкин Дмитрий Николаевич",
+    "profile_url": "/travkin-dmitriy-nikolayevich",
+    "photo_url": "https://dksta.ru/thumb/2/mefyQf6dedROwjestcj3YQ/180r180/d/travkin_dn_krug.jpg",
+    "position": "доцент кафедры",
+    "email": "travkin@dksta.ru",
+    "subjects": [
+      "Программирование и основы алгоритмизации",
+      "Программирование микроконтроллеров",
+      "Программно-аппаратное обеспечение  интернета вещей"
+    ]
+  },
+  {
+    "name": "Хрусталёв Павел Евгеньевич",
+    "profile_url": "/khrustalev-pavel-yevgenyevich",
+    "photo_url": "https://dksta.ru/thumb/2/H1g8DTMOpv5RPrI8doxUyg/r/d/khruuustalev1.jpg",
+    "position": "доцент;Начальник учебно-методического управления;Заместитель ответственного секретаря ПК по приему на программы подготовки научно-педагогических кадров",
+    "email": "hrustalev@dksta.ru",
+    "subjects": [
+      "Вычислительные машины, системы, сети;",
+      "Компьютерные технологии в приборостроении;",
+      "Методы искусственного интеллекта (Математические методы интеллектуального управления);",
+      "Системное программное обеспечение"
+    ]
+  },
+  {
+    "name": "Чащин Евгений Анатольевич",
+    "profile_url": "/chashchin-yevgeniy-anatolyevich",
+    "photo_url": "https://dksta.ru/thumb/2/pdhkx3y2vlsH_b5Wnx9sBw/r/d/prepodyvaa_kopiya.jpg",
+    "position": "Заведующий кафедрой электротехники",
+    "email": "electrician@dksta.ru",
+    "subjects": [
+      "Информационно-измерительная техника;",
+      "Общая энергетика",
+      "Переходные процессы в электроэнергетических системах;",
+      "Релейная защита и автоматизация электроэнергетических систем",
+      "Электрические станции и подстанции",
+      "Электротехника;",
+      "Электроника и микропроцессорная техника;",
+      "Электротехника и электроника",
+      "Электротехника, электроника и микропроцессорная техника.",
+      "Энергосбережение"
+    ]
+  },
+  {
+    "name": "Митрофанов Андрей Анатольевич",
+    "profile_url": "/mitrofanov-andrey-anatolyevich",
+    "photo_url": "https://dksta.ru/thumb/2/qP5e3IzPuGmjJtbQJ0qL4A/r/d/prepod_kopolorloloiya.jpg",
+    "position": "Декан факультета Автоматики и электроникиКафедра Электротехники - доцент кафедры (вн. совм.)",
+    "email": "mitrofanov@dksta.ru",
+    "subjects": [
+      "Введение в специальность",
+      "Монтаж, эксплуатация и ремонт электрооборудования",
+      "Основы электроэнергетики",
+      "Приёмники и потребители электрической энергии систем электроснабжения",
+      "Электроника",
+      "Электроснабжение",
+      "Электротехническое и конструкционное материаловедение",
+      "Электроснабжение промышленных и гражданских зданий"
+    ]
+  },
+  {
+    "name": "Молокин Юрий Валентинович",
+    "profile_url": "/molokin-yurii-valentinovich",
+    "photo_url": "",
+    "position": "доцент",
+    "email": "electrician@dksta.ru",
+    "subjects": [
+      "Теоретические основы электротехники",
+      "Электрические машины"
+    ]
+  },
+  {
+    "name": "Пищулов Данила Геннадьевич",
+    "profile_url": "/pischulov-damila-gennadevich",
+    "photo_url": "",
+    "position": "старший преподаватель",
+    "email": "electrician@dksta.ru",
+    "subjects": [
+      "Монтаж, эксплуатация и ремонт электрооборудования;",
+      "Основы электроэнергетики"
+    ]
+  },
+  {
+    "name": "Шилов Игорь Вячеславович",
+    "profile_url": "/shilov-igor-vyacheslavovich",
+    "photo_url": "https://dksta.ru/thumb/2/Leo6fbxI0OdtsxewbSY7Zg/r/d/prepod_koapvaprprprpiya.jpg",
+    "position": "доцент кафедры Технологии машиностроения,доцент кафедры Электротехники внутр. совм.",
+    "email": "shilov@dksta.ru",
+    "subjects": [
+      "Взаимодействие лазерного излучения с веществом",
+      "Математическое моделирование в лазерной технике и технологии",
+      "Физика твердого тела",
+      "Основы кристаллографии",
+      "Техника физического эксперимента и метрология",
+      "Применение лазеров в военной, ракетной и космической технике",
+      "Электроэнергетические системы и сети;",
+      "Компьютерное моделирование в электротехнике;",
+      "Техника высоких напряжений;",
+      "Надежность электроснабжения"
+    ]
+  },
+  {
+    "name": "Солохин Сергей Александрович",
+    "profile_url": "/solokhin-sergey-aleksandrovich",
+    "photo_url": "https://dksta.ru/thumb/2/CGopEXqJnNI9nwJ45GNVuQ/r/d/prepod_apaprrprkopiya.jpg",
+    "position": "заведующий кафедрой лазерных и оптико-электронных систем",
+    "email": "solohin@dksta.ru",
+    "subjects": [
+      "Прикладная оптика",
+      "Приемники лазерного излучения",
+      "Технология обработки материалов лазерным излучением",
+      "Прогрессивные технологии в МС",
+      "Физика"
+    ]
+  },
+  {
+    "name": "Гришанович Юлия Васильевна",
+    "profile_url": "/grishanovich-yuliya-vasilyevna",
+    "photo_url": "https://dksta.ru/thumb/2/l8upTr521u_r0plQcH2QBQ/r/d/grishanovich1.jpg",
+    "position": "Доцент кафедры",
+    "email": "grishanovichuv@dksta.ru",
+    "subjects": [
+      "Физика"
+    ]
+  },
+  {
+    "name": "Ершков Михаил Николаевич",
+    "profile_url": "/yershkov-mikhail-nikolayevich",
+    "photo_url": "https://dksta.ru/thumb/2/HS-toRQ2L2yDpi0Ui5dWew/r/d/yershkoov.jpg",
+    "position": "Старший преподаватель кафедры",
+    "email": "ershkov@dksta.ru",
+    "subjects": [
+      "Лазерная физика",
+      "Измерение параметров лазеров",
+      "Оптические измерения",
+      "Лазерные измерения",
+      "Проектирование лазерных систем",
+      "Лазерные системы специального назначения",
+      "Введение в специальность."
+    ]
+  },
+  {
+    "name": "Сметанин Сергей Николаевич",
+    "profile_url": "/smetanin-sergey-nikolayevich",
+    "photo_url": "",
+    "position": "профессор кафедры",
+    "email": "smetanin@dksta.ru",
+    "subjects": [
+      "Уравнения математической физики",
+      "Физические основы нелинейной оптики",
+      "Силовая оптика",
+      "Теория и проектирование твердотельных лазеров"
+    ]
+  },
+  {
+    "name": "Тетерин Евгений Петрович",
+    "profile_url": "/teterin-yevgeniy-petrovich",
+    "photo_url": "https://dksta.ru/thumb/2/PUXSL4-QHV9n3Ht-7Tex7A/r/d/teteriin11.jpg",
+    "position": "профессор кафедры",
+    "email": "teterinep@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Смольянинова Юлия Владимировна",
+    "profile_url": "/smolyaninova-yuliya-vladimirovna",
+    "photo_url": "https://dksta.ru/thumb/2/ucFqK5vwNW3W4b39ZnfZjg/r/d/smol1112.jpg",
+    "position": "Проректор по учебной работе и развитию,Заведующий кафедрой экономики и гуманитарных наукдоцент кафедры менеджмента",
+    "email": "urr@dksta.ru",
+    "subjects": [
+      "Корпоративные финансы",
+      "Контроллинг",
+      "Основы финансового менеджмента",
+      "Учет и анализ",
+      "Экономический анализ производственно-хозяйственной деятельности"
+    ]
+  },
+  {
+    "name": "Люблинский Марк Станиславович",
+    "profile_url": "/lyublinskiy-mark-stanislavovich",
+    "photo_url": "https://dksta.ru/thumb/2/MaQ54PmWrK6b_Zy1ZperkA/r/d/prepod_yvyvyvkopiya.jpg",
+    "position": "заведующий  кафедрой экономики и гуманитарных наук",
+    "email": "lyubliinskiy@dksta.ru",
+    "subjects": [
+      "Организация производства",
+      "Деловая этика",
+      "Допуск к защите",
+      "Организационное поведение",
+      "Производственный менеджмент",
+      "Системный анализ",
+      "Руководство ВКР",
+      "Руководство научно-исследовательской  работой",
+      "Руководство производственной практикой",
+      "Руководство преддипломной практикой",
+      "Руководство учебной практикой",
+      "Управление изменениями",
+      "Управление персоналом",
+      "Участие в  ГИА",
+      "Функционально-стоимостной анализ",
+      "Ценообразование",
+      "ЭЭНТ",
+      "Экономика",
+      "Экономика и социология труда"
+    ]
+  },
+  {
+    "name": "Котов Андрей Алексеевич",
+    "profile_url": "/kotov-andrej-alekseevich",
+    "photo_url": "https://dksta.ru/d/kotov1.jpg",
+    "position": "старший преподаватель",
+    "email": "eign@dksta.ru",
+    "subjects": [
+      "Микроэкономика",
+      "Бухгалтерский управленческий учет",
+      "Бухгалтерский учет и анализ"
+    ]
+  },
+  {
+    "name": "Разумовская Ольга Валерьевна",
+    "profile_url": "/razumovskaya-olga-valerevna",
+    "photo_url": "https://dksta.ru/thumb/2/brqWHWawvozbMENdH6-Frg/360r300/d/razumovskaya_krug.jpg",
+    "position": "доцент кафедры Экономики и гуманитарных наукученый секретарь Ученого совета",
+    "email": "razumovska@dksta.ru",
+    "subjects": [
+      "история(история России, всеобщая история)",
+      "культурология",
+      "право",
+      "правоведение",
+      "политология"
+    ]
+  },
+  {
+    "name": "Соколов Александр Николаевич",
+    "profile_url": "/sokolov-aleksandr-nikolaevich",
+    "photo_url": "https://dksta.ru/thumb/2/P5dcF7MyX19YHVg7Cec9zA/360r300/d/sokolov_krug.jpg",
+    "position": "доцент",
+    "email": "a.sokolov@dksta.ru",
+    "subjects": [
+      "анализ и диагностика финансово-хозяйственной деятельности",
+      "финансы"
+    ]
+  },
+  {
+    "name": "Феофанова Ольга Николаевна",
+    "profile_url": "/feofanova-olga-nikolayevna",
+    "photo_url": "https://dksta.ru/thumb/2/U_NgLSEp_Pa_LTlB0Nt7Nw/360r300/d/feofanova_krug.jpg",
+    "position": "старший преподаватель кафедры",
+    "email": "feofanova@dksta.ru",
+    "subjects": [
+      "Экономическая эффективность новой техники",
+      "Экономика предприятия",
+      "Управление затратами",
+      "Экономика и управление машиностроительным производством."
+    ]
+  },
+  {
+    "name": "Щурилов Алексей Вадимович",
+    "profile_url": "/shchurilov-aleksey-vadimovich",
+    "photo_url": "https://dksta.ru/d/prepod_kopiyayvyapoll.jpg",
+    "position": "доцент кафедры",
+    "email": "a.shchurilov@dksta.ru",
+    "subjects": [
+      "Институциональная экономика",
+      "Экономика общественного сектора",
+      "Теория отраслевых рынков, Экономическая оценка инвестиций",
+      "Управление проектом",
+      "Управление затратами",
+      "Организация  инновационной деятельности предприятия",
+      "Экономическая оценка инвестиций",
+      "Методы оптимальных решений",
+      "Эконометрика",
+      "История экономических учений",
+      "Теория игр",
+      "Планирование на предприятии",
+      "Коммерческая деятельность",
+      "Методы и модели в экономике",
+      "Математическое моделирование экономических процессов",
+      "Оценка и управление стоимостью предприятия",
+      "Основы экономики"
+    ]
+  },
+  {
+    "name": "Чернова Ольга Вячеславовна",
+    "profile_url": "/chernova-olga-vyacheslavovna",
+    "photo_url": "https://dksta.ru/thumb/2/U7EyBAUF7hxfwl6jx7xSrA/r/d/cheyernoova1.jpg",
+    "position": "заведующий кафедрой менеджмента;председатель учебно-методической комиссии факультета ЭиМ",
+    "email": "chernova@dksta.ru",
+    "subjects": [
+      "Бизнес-планирование",
+      "Бизнес-планирование деятельности корпораций",
+      "Инновационный менеджмент",
+      "Основы финансовой математики",
+      "Управление  проектами",
+      "Управление рисками",
+      "Управленческая экономика",
+      "Эффективность управленческих решений",
+      "Инновационный менеджмент"
+    ]
+  },
+  {
+    "name": "Беспалова Алла Владимировна",
+    "profile_url": "/bespalova-alla-vladimirovna",
+    "photo_url": "https://dksta.ru/thumb/2/frrgja_7utNy59pLHt4lVw/r/d/bespaaalova.jpg",
+    "position": "доцент кафедры",
+    "email": "besav@dksta.ru",
+    "subjects": [
+      "Введение в профессию",
+      "Гендерная психология",
+      "Дифференциальная психология",
+      "Математические методы в психологии",
+      "Общепсихологический практикум",
+      "Психология семьи и семейного консультирования",
+      "Психология развития и возрастная психология",
+      "Психология общения"
+    ]
+  },
+  {
+    "name": "Бралгина Анастасия Анатольевна",
+    "profile_url": "/bralgina-anastasiya-anatolevna",
+    "photo_url": "",
+    "position": "ассистент преподавателя",
+    "email": "agrazheva@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Ждан Дмитрий Борисович",
+    "profile_url": "/zhdan-dmitriy-borisovich",
+    "photo_url": "https://dksta.ru/thumb/2/Zp_5BU3Mlw4rL84guY1tWQ/r/d/zhdaan.jpg",
+    "position": "Доцент кафедрыНачальник бюро системной интеграции и информационной поддержки изделийУправления информационных технологий АО «Завод имени В.А. Дегтярёва»",
+    "email": "zhdan@dksta.ru",
+    "subjects": [
+      "Логистика",
+      "Методы принятия управленческих решений",
+      "Моделирование бизнес-процессов корпорации",
+      "Теория организации и организационное поведение"
+    ]
+  },
+  {
+    "name": "Ипполитова Александра Григорьевна",
+    "profile_url": "/ippolitova-aleksandra-grigoryevna",
+    "photo_url": "https://dksta.ru/thumb/2/dcRqfKKGYRVpSaP4DP11xw/r/d/ipoliiit.jpg",
+    "position": "Старший преподаватель кафедры",
+    "email": "ippolitova@dksta.ru",
+    "subjects": [
+      "Документирование управленческой деятельности",
+      "Контроллинг",
+      "Налоговая система",
+      "Экономический анализ производственно-хозяйственной деятельности"
+    ]
+  },
+  {
+    "name": "Ищик Лариса Владимировна",
+    "profile_url": "/ishchik-larisa-vladimirovna",
+    "photo_url": "",
+    "position": "доцент кафедры",
+    "email": "mnj401@dksta.ru",
+    "subjects": []
+  },
+  {
+    "name": "Маслова Анна Валерьевна",
+    "profile_url": "/maslova-anna-valeryevna",
+    "photo_url": "https://dksta.ru/thumb/2/0hDkLIG1BYt6EGg0VM5RIQ/r/d/masloova1.jpg",
+    "position": "доцент кафедры",
+    "email": "maslova@dksta.ru",
+    "subjects": [
+      "Институциональная экономика",
+      "Корпоративное управление",
+      "Корпорация как форма организации бизнеса",
+      "Маркетинг-менеджмент",
+      "Менеджмент организации",
+      "Мировая экономика",
+      "Современные проблемы менеджмента",
+      "Стратегический менеджмент",
+      "Теория менеджмента",
+      "Управление развитием персонала",
+      "Финансы и кредит"
+    ]
+  },
+  {
+    "name": "Музафаров Андрей Андреевич",
+    "profile_url": "/muzafarov-andrey-andreyevich",
+    "photo_url": "https://dksta.ru/thumb/2/sicrSk8DhO-OqU1gUnxsBQ/r/d/muzafar1.jpg",
+    "position": "Старший преподаватель",
+    "email": "muzafarov@dksta.ru",
+    "subjects": [
+      "Антикризисное управление",
+      "Деловые коммуникации",
+      "Маркетинг",
+      "Организация предпринимательской деятельности",
+      "Управление человеческими ресурсами",
+      "Экономическая теория"
+    ]
+  },
+  {
+    "name": "Федоров Александр Федорович",
+    "profile_url": "/fedorov-aleksandr-fedorovich",
+    "photo_url": "https://dksta.ru/thumb/2/uCFAHz4iIMYkIUMJT9Q5VA/180r180/d/fedorov_krug.jpg",
+    "position": "доцент кафедры",
+    "email": "fedorov@dksta.ru",
+    "subjects": [
+      "Общая психология",
+      "Психодиагностика, конфликтология"
+    ]
+  },
+  {
+    "name": "Федоровых Галина Анатольевна",
+    "profile_url": "/fedorovykh-galina-anatolyevna",
+    "photo_url": "https://dksta.ru/thumb/2/tlwNVeaE_YK7izDBss0pJw/r/d/feyedoroova.jpg",
+    "position": "доцент кафедры,ведущий специалист Приемной комиссии",
+    "email": "galina7@dksta.ru",
+    "subjects": [
+      "Введение в клиническую психологию",
+      "Методологические основы психологии",
+      "Нейрофизиология",
+      "Основы консультативной психологии",
+      "Основы нейропсихологии",
+      "Основы патопсихологии",
+      "Основы психогенетики",
+      "Основы психологии личности",
+      "Основы психосоматики",
+      "Основы развития и коррекции личности",
+      "Психология менеджмента",
+      "Психология стресса",
+      "Психофизиология"
+    ]
+  },
+  {
+    "name": "Яшнова Юлия Валерьевна",
+    "profile_url": "/yashnova-yuliya-valerevna",
+    "photo_url": "",
+    "position": "ассистент преподавателя",
+    "email": "yashnova-julia@mail.ru",
+    "subjects": [
+      "Менеджмент организации",
+      "Мировая экономика",
+      "Организация и оплата труда"
+    ]
+  },
+  {
+    "name": "Быкова Анна Викторовна",
+    "profile_url": "/bykova-anna-viktorovna",
+    "photo_url": "https://dksta.ru/thumb/2/GnsM7tpqFjpvL0_gm84F9w/360r300/d/bykova_krug_2.jpg",
+    "position": "Декан факультета Экономики и менеджмента;Член комиссии по приему государственного экзаменапо русскому языку как иностранному для получения гражданства РФ",
+    "email": "bykova@dksta.ru",
+    "subjects": [
+      "Английский язык",
+      "Немецкий язык."
+    ]
+  },
+  {
+    "name": "Зекина Марина Андреевна",
+    "profile_url": "/zekina-marina-andreevna",
+    "photo_url": "https://dksta.ru/thumb/2/iwCePFovRniObha6bM-X_A/360r300/d/zekina_krug.jpg",
+    "position": "ассистент преподавателя;заместитель декана по воспитательной работефакультета Экономики и менеджмента",
+    "email": "zekina@dksta.ru",
+    "subjects": [
+      "Английский язык",
+      "Деловой иностранный язык"
+    ]
+  },
+  {
+    "name": "Опрятнова Юлия Геннадьевна",
+    "profile_url": "/apryatnova-yuliya-gennadevna",
+    "photo_url": "https://dksta.ru/thumb/2/m9AoOuJeuVy4KstwF9-FmA/360r300/d/opryatnova_krug.jpg",
+    "position": "доцент кафедры",
+    "email": "opryatnova@dksta.ru",
+    "subjects": [
+      "Английский язык",
+      "Деловой иностранный язык"
+    ]
+  }
+]

@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "StudentApp"
+rootProject.name = "StudentAppKGTU"
 include(":app")
  

@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Splash while process starts -->
+    <style name="Theme.StudentApp.Splash" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:statusBarColor">#1A336C</item>
+        <item name="android:navigationBarColor">#1A336C</item>
+        <item name="android:windowFullscreen">false</item>
+    </style>
 
-    <style name="Theme.StudentApp" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.StudentApp" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#1A336C</item>
+        <item name="android:navigationBarColor">#1A336C</item>
+    </style>
 </resources>
