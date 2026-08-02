@@ -178,6 +178,62 @@ def week_type():
     return {"weekType": get_current_week_type()}
 
 
+def _course_file_version(course: int) -> Optional[dict]:
+    """
+    Stable version for a course schedule file.
+    Changes only when the Excel on disk is replaced (mtime/size),
+    not when the server merely re-indexes JSON cache.
+    """
+    path = UPLOAD_DIR / f"schedule{course}.xlsx"
+    if not path.exists():
+        return None
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    version = f"{int(st.st_mtime)}-{st.st_size}"
+    from datetime import datetime, timezone
+
+    updated_at = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat()
+    return {
+        "course": course,
+        "version": version,
+        "updatedAt": updated_at,
+        "available": True,
+    }
+
+
+@app.get("/api/schedule-updates")
+def schedule_updates():
+    """
+    Lightweight endpoint for the app to detect new Excel uploads.
+    Clients poll this (e.g. every 15 min) and show a push-style notification
+    when their course version changes.
+    """
+    courses = []
+    for i in range(1, 5):
+        info = _course_file_version(i)
+        if info is None:
+            courses.append(
+                {
+                    "course": i,
+                    "version": "",
+                    "updatedAt": None,
+                    "available": False,
+                }
+            )
+        else:
+            courses.append(info)
+    # Single fingerprint of all available courses
+    fingerprint = "|".join(
+        f"{c['course']}:{c['version']}" for c in courses if c.get("version")
+    )
+    return {
+        "courses": courses,
+        "fingerprint": fingerprint,
+    }
+
+
 @app.get("/api/groups")
 def get_groups(course: int = Query(..., ge=1, le=4), db: Session = Depends(get_db)):
     file_path = UPLOAD_DIR / f"schedule{course}.xlsx"

@@ -90,3 +90,15 @@ data class NewsItemDto(
 data class WeekTypeDto(
     val weekType: String,
 )
+
+data class ScheduleUpdatesDto(
+    val courses: List<CourseUpdateDto> = emptyList(),
+    val fingerprint: String = "",
+)
+
+data class CourseUpdateDto(
+    val course: Int,
+    val version: String = "",
+    val updatedAt: String? = null,
+    val available: Boolean = false,
+)

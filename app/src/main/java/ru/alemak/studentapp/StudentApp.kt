@@ -5,12 +5,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import dagger.hilt.android.HiltAndroidApp
+import ru.alemak.studentapp.updates.ScheduleUpdateScheduler
 
 @HiltAndroidApp
 class StudentApp : Application() {
     override fun onCreate() {
         super.onCreate()
         createReminderChannel()
+        createScheduleUpdatesChannel()
+        ScheduleUpdateScheduler.schedule(this)
     }
 
     private fun createReminderChannel() {
@@ -27,7 +30,22 @@ class StudentApp : Application() {
         manager.createNotificationChannel(channel)
     }
 
+    private fun createScheduleUpdatesChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        val channel = NotificationChannel(
+            SCHEDULE_UPDATES_CHANNEL_ID,
+            "Обновления расписания",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Когда на сервер загрузили новый файл расписания"
+            enableVibration(true)
+        }
+        manager.createNotificationChannel(channel)
+    }
+
     companion object {
         const val REMINDERS_CHANNEL_ID = "reminders"
+        const val SCHEDULE_UPDATES_CHANNEL_ID = "schedule_updates"
     }
 }

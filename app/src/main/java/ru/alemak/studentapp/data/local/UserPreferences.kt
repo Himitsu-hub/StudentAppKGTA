@@ -11,6 +11,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.userDataStore: DataStore<Preferences> by preferencesDataStore("user_prefs")
@@ -42,6 +43,22 @@ class UserPreferences @Inject constructor(
             if (subgroup != null) prefs[Keys.SUBGROUP] = subgroup else prefs.remove(Keys.SUBGROUP)
         }
     }
+
+    suspend fun getSelectedCourse(): Int =
+        store.data.map { it[Keys.COURSE] ?: 1 }.first()
+
+    /** Last known server version string for a course (empty = never seen). */
+    suspend fun getScheduleVersion(course: Int): String =
+        store.data.map { it[scheduleVersionKey(course)].orEmpty() }.first()
+
+    suspend fun setScheduleVersion(course: Int, version: String) {
+        store.edit { prefs ->
+            prefs[scheduleVersionKey(course)] = version
+        }
+    }
+
+    private fun scheduleVersionKey(course: Int) =
+        stringPreferencesKey("schedule_version_$course")
 
     private object Keys {
         val COURSE = intPreferencesKey("selected_course")

@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -68,16 +67,22 @@ import ru.alemak.studentapp.ui.theme.BlueKGTA
 /** Spacing between news cards. */
 private val NewsCardSpacing = 5.dp
 private val NewsListPadding = 5.dp
-/** 3 full cards + half of the 4th. */
-private const val VisibleNewsCards = 3.5f
-/** Slightly compact cards (a few px less top/bottom). */
-private val MinNewsCardHeight = 68.dp
+/** Fixed card height — list window is sized for exactly this many cards. */
+private val NewsCardFixedHeight = 72.dp
+/** Exactly 3 posts visible (no stretch to fill the screen). */
+private const val VisibleNewsCards = 3
+/** Total height of the scrollable news list (padding + 3 cards + 2 gaps). */
+private val NewsListFixedHeight =
+    NewsListPadding * 2 +
+        NewsCardFixedHeight * VisibleNewsCards +
+        NewsCardSpacing * (VisibleNewsCards - 1)
 
 @Composable
 fun HomeScreen(
     onOpenSchedule: () -> Unit,
     onOpenTeachers: () -> Unit,
     onOpenReminders: () -> Unit,
+    onOpenCampus: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -100,7 +105,6 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Compact top so news window fits ~3.5 cards
             Image(
                 painter = painterResource(id = R.drawable.kgta_logo),
                 contentDescription = "Логотип КГТУ",
@@ -134,23 +138,26 @@ fun HomeScreen(
                 else -> NextLessonBlock(state.nextLesson)
             }
 
-            Spacer(Modifier.weight(0.08f))
+            // Free space goes HERE — not into the news list
+            Spacer(Modifier.weight(1f))
 
             NavButton("Расписание", onOpenSchedule)
             Spacer(Modifier.height(4.dp))
             NavButton("Преподаватели", onOpenTeachers)
             Spacer(Modifier.height(4.dp))
             NavButton("Напоминания", onOpenReminders)
+            Spacer(Modifier.height(4.dp))
+            NavButton("Кампус", onOpenCampus)
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
 
-            // Larger news area → ~3.5 posts visible
+            // Fixed height = exactly 3 posts (does not grow with screen)
             when {
                 state.isLoadingNews -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(4.2f)
+                            .height(NewsListFixedHeight + 28.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(Color.White.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.Center,
@@ -161,16 +168,16 @@ fun HomeScreen(
                 state.news.isNotEmpty() -> {
                     NewsSection(
                         news = state.news,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(4.2f),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 else -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(4.2f),
+                            .height(NewsListFixedHeight)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.White.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -182,7 +189,7 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -287,21 +294,14 @@ private fun NewsSection(
             )
         }
 
-        // Card height from real window size → always ~3 full + half of 4th
-        BoxWithConstraints(
+        // Fixed window: exactly 3 cards tall — never stretches to 4–5
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .height(NewsListFixedHeight)
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color.White.copy(alpha = 0.1f)),
         ) {
-            // Inner list area (minus list padding)
-            val listViewport = (maxHeight - NewsListPadding * 2).coerceAtLeast(0.dp)
-            // 3 gaps between 3.5 cards — force 3.5 visibility (don't inflate card min too high)
-            val spacings = NewsCardSpacing * 3
-            val cardHeight = ((listViewport - spacings) / VisibleNewsCards)
-                .coerceIn(MinNewsCardHeight, 88.dp)
-
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -316,7 +316,7 @@ private fun NewsSection(
                     NewsCard(
                         item = item,
                         expanded = expanded,
-                        cardHeight = cardHeight,
+                        cardHeight = NewsCardFixedHeight,
                         onToggle = {
                             expandedUrl = if (expanded) null else item.url
                         },

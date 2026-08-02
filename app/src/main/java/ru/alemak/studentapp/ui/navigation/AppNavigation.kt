@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import ru.alemak.studentapp.ui.campus.CampusScreen
 import ru.alemak.studentapp.ui.home.HomeScreen
 import ru.alemak.studentapp.ui.reminders.RemindersScreen
 import ru.alemak.studentapp.ui.schedule.ScheduleScreen
@@ -19,6 +20,7 @@ object Routes {
     const val TEACHERS = "teachers"
     const val TEACHER_DETAIL = "teacher/{name}"
     const val REMINDERS = "reminders"
+    const val CAMPUS = "campus"
 
     fun teacherDetail(name: String) = "teacher/${Uri.encode(name)}"
 }
@@ -33,6 +35,7 @@ fun AppNavigation() {
                 onOpenSchedule = { navController.navigate(Routes.SCHEDULE) },
                 onOpenTeachers = { navController.navigate(Routes.TEACHERS) },
                 onOpenReminders = { navController.navigate(Routes.REMINDERS) },
+                onOpenCampus = { navController.navigate(Routes.CAMPUS) },
             )
         }
         composable(Routes.SCHEDULE) {
@@ -58,6 +61,9 @@ fun AppNavigation() {
         }
         composable(Routes.REMINDERS) {
             RemindersScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.CAMPUS) {
+            CampusScreen(onBack = { navController.popBackStack() })
         }
     }
 }

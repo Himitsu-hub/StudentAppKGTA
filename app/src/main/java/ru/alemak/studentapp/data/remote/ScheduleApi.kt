@@ -26,6 +26,10 @@ interface ScheduleApi {
     @GET("api/week-type")
     suspend fun getWeekType(): WeekTypeDto
 
+    /** Lightweight poll: versions of Excel files on the server. */
+    @GET("api/schedule-updates")
+    suspend fun getScheduleUpdates(): ScheduleUpdatesDto
+
     @GET("health")
     suspend fun health(): Map<String, String>
 }
