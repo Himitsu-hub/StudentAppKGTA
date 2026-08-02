@@ -43,13 +43,6 @@ import ru.alemak.studentapp.ui.theme.BlueKGTA
 import ru.alemak.studentapp.util.DateUtils
 import ru.alemak.studentapp.util.HolidayUtils
 
-// Explicit light palette so schedule stays readable in any system theme
-private val ScheduleBg = Color(0xFFF5F7FA)
-private val CardWhite = Color.White
-private val LessonBg = Color(0xFFF0F3F8)
-private val TextDark = Color(0xFF1A1A1A)
-private val TextMuted = Color(0xFF5F6B7A)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleScreen(
@@ -57,6 +50,11 @@ fun ScheduleScreen(
     viewModel: ScheduleViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scheme = MaterialTheme.colorScheme
+    // Light schedule was always light-gray (not brand blue); dark uses theme background
+    val isLightBrand = scheme.background == BlueKGTA
+    val scheduleBg = if (isLightBrand) Color(0xFFF5F7FA) else scheme.background
+    val accent = if (isLightBrand) BlueKGTA else scheme.primary
 
     var showCourseDialog by remember { mutableStateOf(false) }
     var showGroupDialog by remember { mutableStateOf(false) }
@@ -70,20 +68,20 @@ fun ScheduleScreen(
                 onRefresh = { viewModel.refresh() },
             )
         },
-        containerColor = ScheduleBg,
+        containerColor = scheduleBg,
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(ScheduleBg),
+                .background(scheduleBg),
         ) {
             OfflineBanner(visible = state.usingCachedData)
 
             Column(Modifier.padding(16.dp)) {
                 Text(
                     text = "Неделя: ${state.weekType}",
-                    color = BlueKGTA,
+                    color = accent,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier
@@ -91,16 +89,23 @@ fun ScheduleScreen(
                         .padding(bottom = 12.dp),
                 )
 
+                Text(
+                    text = "Нажмите, чтобы сменить (курс / группа / подгруппа)",
+                    color = if (isLightBrand) Color(0xFF5F6B7A) else scheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+
                 SelectionChip(
                     text = "Курс: ${state.course}",
                     onClick = { showCourseDialog = true },
                 )
                 SelectionChip(
-                    text = state.group ?: "Выбрать группу",
+                    text = "Группа: ${state.group ?: "выбрать"}",
                     onClick = { if (state.groups.isNotEmpty()) showGroupDialog = true },
                 )
                 SelectionChip(
-                    text = state.subgroup ?: "Выбрать подгруппу",
+                    text = "Подгруппа: ${state.subgroup ?: "выбрать"}",
                     onClick = {
                         if (!state.group.isNullOrBlank() &&
                             state.groups[state.group].orEmpty().isNotEmpty()
@@ -174,17 +179,21 @@ fun ScheduleScreen(
 
 @Composable
 private fun SelectionChip(text: String, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val isLightBrand = scheme.background == BlueKGTA
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = BlueKGTA),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isLightBrand) BlueKGTA else scheme.primaryContainer,
+        ),
     ) {
         Text(
             text = text,
-            color = Color.White,
+            color = if (isLightBrand) Color.White else scheme.onPrimaryContainer,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
         )
@@ -198,9 +207,14 @@ private fun <T> SimpleListDialog(
     onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val isLightBrand = scheme.background == BlueKGTA
+    val cardBg = if (isLightBrand) Color.White else scheme.surface
+    val itemBg = if (isLightBrand) Color(0xFFF0F3F8) else scheme.surfaceVariant
+    val textColor = if (isLightBrand) Color(0xFF1A1A1A) else scheme.onSurface
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontWeight = FontWeight.Bold, color = TextDark) },
+        title = { Text(title, fontWeight = FontWeight.Bold, color = textColor) },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(items, key = { it.first }) { (label, value) ->
@@ -209,12 +223,12 @@ private fun <T> SimpleListDialog(
                             .fillMaxWidth()
                             .clickable { onSelect(value) },
                         shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = LessonBg),
+                        colors = CardDefaults.cardColors(containerColor = itemBg),
                         elevation = CardDefaults.cardElevation(1.dp),
                     ) {
                         Text(
                             text = label,
-                            color = TextDark,
+                            color = textColor,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
                             style = MaterialTheme.typography.bodyLarge,
@@ -224,26 +238,33 @@ private fun <T> SimpleListDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена", color = BlueKGTA) }
+            TextButton(onClick = onDismiss) {
+                Text("Отмена", color = if (isLightBrand) BlueKGTA else scheme.primary)
+            }
         },
-        containerColor = CardWhite,
+        containerColor = cardBg,
     )
 }
 
 @Composable
 private fun DayScheduleCard(day: ScheduleDay) {
+    val scheme = MaterialTheme.colorScheme
+    val isLightBrand = scheme.background == BlueKGTA
+    val cardBg = if (isLightBrand) Color.White else scheme.surface
+    val accent = if (isLightBrand) BlueKGTA else scheme.primary
+    val muted = if (isLightBrand) Color(0xFF5F6B7A) else scheme.onSurfaceVariant
     val holidayName = HolidayUtils.getHolidayName(DateUtils.getDateForDay(day.dayName))
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardWhite),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(2.dp),
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(
                 text = day.dayName,
                 style = MaterialTheme.typography.titleLarge,
-                color = BlueKGTA,
+                color = accent,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(10.dp))
@@ -253,9 +274,9 @@ private fun DayScheduleCard(day: ScheduleDay) {
                         ?: day.lessons.firstOrNull { it.type.equals("праздник", true) }?.subject
                         ?: "Праздничный день"
                     Text(name, color = Color(0xFFB42318), fontWeight = FontWeight.Bold)
-                    Text("Занятий нет", color = TextMuted)
+                    Text("Занятий нет", color = muted)
                 }
-                day.lessons.isEmpty() -> Text("Пар нет", color = TextMuted)
+                day.lessons.isEmpty() -> Text("Пар нет", color = muted)
                 else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     day.lessons.forEach { LessonCard(it) }
                 }
@@ -266,33 +287,39 @@ private fun DayScheduleCard(day: ScheduleDay) {
 
 @Composable
 private fun LessonCard(lesson: Lesson) {
+    val scheme = MaterialTheme.colorScheme
+    val isLightBrand = scheme.background == BlueKGTA
+    val lessonBg = if (isLightBrand) Color(0xFFF0F3F8) else scheme.surfaceVariant
+    val accent = if (isLightBrand) BlueKGTA else scheme.primary
+    val textDark = if (isLightBrand) Color(0xFF1A1A1A) else scheme.onSurface
+    val muted = if (isLightBrand) Color(0xFF5F6B7A) else scheme.onSurfaceVariant
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = LessonBg),
+        colors = CardDefaults.cardColors(containerColor = lessonBg),
         shape = RoundedCornerShape(10.dp),
     ) {
         Column(Modifier.padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(lesson.time, color = BlueKGTA, fontWeight = FontWeight.Bold)
+                Text(lesson.time, color = accent, fontWeight = FontWeight.Bold)
                 Text(
                     text = lesson.type,
                     color = when (lesson.type.lowercase()) {
-                        "лекция" -> Color(0xFF1976D2)
-                        "практика" -> Color(0xFF388E3C)
-                        "лабораторная" -> Color(0xFFF57C00)
-                        else -> TextMuted
+                        "лекция" -> if (isLightBrand) Color(0xFF1976D2) else Color(0xFF64B5F6)
+                        "практика" -> if (isLightBrand) Color(0xFF388E3C) else Color(0xFF81C784)
+                        "лабораторная" -> if (isLightBrand) Color(0xFFF57C00) else Color(0xFFFFB74D)
+                        else -> muted
                     },
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
                 )
             }
             Spacer(Modifier.height(4.dp))
-            Text(lesson.subject, fontWeight = FontWeight.SemiBold, color = TextDark)
+            Text(lesson.subject, fontWeight = FontWeight.SemiBold, color = textDark)
             if (lesson.teacher.isNotBlank()) {
-                Text(lesson.teacher, color = TextMuted)
+                Text(lesson.teacher, color = muted)
             }
             if (lesson.room.isNotBlank()) {
-                Text("Аудитория: ${lesson.room}", color = TextMuted)
+                Text("Аудитория: ${lesson.room}", color = muted)
             }
         }
     }

@@ -150,14 +150,93 @@ def extract_group_name(text: Optional[str]) -> Optional[str]:
     return None
 
 
+def _roman_to_int(token: str) -> Optional[int]:
+    """Parse simple Roman numerals I..X (also used in Excel: 'I подгруппа')."""
+    t = token.lower().strip()
+    table = {
+        "i": 1,
+        "ii": 2,
+        "iii": 3,
+        "iv": 4,
+        "v": 5,
+        "vi": 6,
+        "vii": 7,
+        "viii": 8,
+        "ix": 9,
+        "x": 10,
+    }
+    return table.get(t)
+
+
 def extract_subgroup(text: Optional[str]) -> Optional[str]:
     if not text or not text.strip():
         return None
-    lower = text.lower().strip()
-    match = re.search(r"(\d)\s*подгрупп", lower)
+    lower = text.lower().replace("\n", " ").strip()
+    # Arabic: "1 подгруппа", "2-я подгруппа"
+    # Roman:  "I подгруппа", "II подгруппа" (common in real Excel from the uni)
+    match = re.search(
+        r"([ivxlcdm]+|\d+)\s*[-.]?\s*(?:я\s+)?подгрупп",
+        lower,
+    )
     if match:
-        return f"{match.group(1)} подгруппа"
+        token = match.group(1)
+        if token.isdigit():
+            n = int(token)
+        else:
+            n = _roman_to_int(token)
+        if n:
+            return f"{n} подгруппа"
+    match = re.search(r"подгрупп\w*\s*[:№]?\s*([ivxlcdm]+|\d+)", lower)
+    if match:
+        token = match.group(1)
+        n = int(token) if token.isdigit() else _roman_to_int(token)
+        if n:
+            return f"{n} подгруппа"
     return None
+
+
+def _column_looks_like_schedule_track(sheet: "SheetAdapter", col: int) -> bool:
+    """True if this column has its own lesson text (not only inherited from a wide left merge)."""
+    for row in range(4, min(LAST_ROW + 1, sheet.max_row or LAST_ROW + 1)):
+        raw = sheet.get_cell_text(row, col)
+        if raw and raw.strip() and raw.strip() not in ("-", "null"):
+            return True
+        # Own merge starting in this column (subgroup-specific block)
+        merge = sheet.find_merge(row, col)
+        if not merge:
+            continue
+        if merge["min_col"] != col:
+            continue
+        top = sheet.get_cell_text(merge["min_row"], merge["min_col"])
+        if top and top.strip() and top.strip() not in ("-", "null"):
+            return True
+    return False
+
+
+def _columns_have_different_lessons(
+    sheet: "SheetAdapter", col_a: int, col_b: int
+) -> bool:
+    """
+    True if col_b sometimes shows a different lesson than col_a
+    (typical 1-я vs 2-я подгруппа of the same group).
+    """
+    for row in range(4, min(LAST_ROW + 1, sheet.max_row or LAST_ROW + 1)):
+        raw_b = sheet.get_cell_text(row, col_b)
+        if raw_b and raw_b.strip() and raw_b.strip() not in ("-", "null"):
+            return True
+        merge_b = sheet.find_merge(row, col_b)
+        if merge_b and merge_b["min_col"] == col_b:
+            top = sheet.get_cell_text(merge_b["min_row"], merge_b["min_col"])
+            if top and top.strip() and top.strip() not in ("-", "null"):
+                return True
+        t_a = (sheet.get_text_with_merged(row, col_a) or "").strip()
+        t_b = (sheet.get_text_with_merged(row, col_b) or "").strip()
+        if t_b and t_a and t_b != t_a:
+            # Shared stream merge would give the same text; difference ⇒ own track
+            return True
+        if t_b and not t_a:
+            return True
+    return False
 
 
 def clean_subject(s: str) -> str:
@@ -370,6 +449,9 @@ def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
       row 2 — group names (may be merged across subgroup columns)
       row 3 — optional "N подгруппа"
     Same group can appear in several blocks (e.g. main + 3-я подгруппа).
+
+    Important: for И-125 the name is often merged over cols of 1-я and 2-я
+    subgroup; both labels on row 3 must become separate tracks.
     """
     groups: Dict[str, GroupInfo] = {}
     last_col = sheet.max_column
@@ -385,7 +467,6 @@ def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
         text = sheet.get_cell_text(2, col)
         group_name = extract_group_name(text)
         if group_name is None:
-            # value may sit only in top-left of a merge
             merged_text = sheet.get_text_with_merged(2, col)
             group_name = extract_group_name(merged_text)
 
@@ -397,19 +478,17 @@ def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
             seen_cols.add(c)
         anchors.append((start_col, end_col, group_name))
 
-    # Sort by column
     anchors.sort(key=lambda a: a[0])
 
     for idx, (start_col, end_col, group_name) in enumerate(anchors):
-        # Block ends at next anchor (any group) so "3 подгруппа" of same name is separate
         if idx + 1 < len(anchors):
             block_end = anchors[idx + 1][0] - 1
         else:
-            # stop before trailing time/day columns
             block_end = last_col - 1
             for c in range(end_col + 1, last_col):
-                t = sheet.get_cell_text(2, c) or ""
-                if t.strip().lower() in ("время", "№ пары", "день недели", "день\nнедели"):
+                t = (sheet.get_cell_text(2, c) or sheet.get_text_with_merged(2, c) or "")
+                tl = t.strip().lower().replace("\n", " ")
+                if tl in ("время", "№ пары", "день недели", "день недели"):
                     block_end = c - 1
                     break
 
@@ -419,41 +498,119 @@ def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
             groups[group_name] = GroupInfo(group_name=group_name)
 
         found: List[Tuple[str, int]] = []
+
+        def add_track(name: str, c: int) -> None:
+            if any(s[0] == name for s in found):
+                return
+            if any(s[1] == c for s in found):
+                return
+            found.append((name, c))
+
+        # 1) Explicit labels on row 3 (resolve merges — "2 подгруппа" may sit in a merge)
         for c in range(start_col, block_end + 1):
-            sub_text = sheet.get_cell_text(3, c)
-            # subgroup label can also be inside group name cell
+            sub_text = sheet.get_text_with_merged(3, c)
             if not sub_text:
-                sub_text = sheet.get_cell_text(2, c)
+                sub_text = sheet.get_cell_text(3, c)
+            # also plain row 2 cell if subgroup written into group header
+            if not sub_text:
+                raw2 = sheet.get_cell_text(2, c)
+                if raw2 and extract_subgroup(raw2):
+                    sub_text = raw2
             subgroup = extract_subgroup(sub_text)
-            if subgroup and not any(s[0] == subgroup for s in found):
-                found.append((subgroup, c))
+            if subgroup:
+                add_track(subgroup, c)
 
-        if found:
-            for name, c in found:
-                if not any(s.name == name for s in groups[group_name].subgroups):
-                    groups[group_name].subgroups.append(SubgroupInfo(name=name, column=c))
-        else:
-            # No explicit labels → whole block is one column for the group (1-я)
-            fallback = "1 подгруппа"
-            if not any(s.column == start_col for s in groups[group_name].subgroups):
-                if not any(s.name == fallback for s in groups[group_name].subgroups):
-                    groups[group_name].subgroups.append(
-                        SubgroupInfo(name=fallback, column=start_col)
-                    )
-                else:
-                    # second block without label — treat as next free subgroup number
-                    used = {s.name for s in groups[group_name].subgroups}
-                    for n in range(1, 6):
-                        candidate = f"{n} подгруппа"
-                        if candidate not in used:
-                            groups[group_name].subgroups.append(
-                                SubgroupInfo(name=candidate, column=start_col)
-                            )
-                            break
+        # 2) Multi-column group header (e.g. И-125 over cols 13–15) but only "1 подгруппа"
+        #    found — look for a second schedule track under the same header.
+        if end_col > start_col and len(found) < 2:
+            for c in range(start_col, end_col + 1):
+                if any(col == c for _, col in found):
+                    continue
+                if c != start_col and _column_looks_like_schedule_track(sheet, c):
+                    used_nums = set()
+                    for name, _ in found:
+                        m = re.search(r"(\d)", name)
+                        if m:
+                            used_nums.add(int(m.group(1)))
+                    n = 1
+                    while n in used_nums:
+                        n += 1
+                    add_track(f"{n} подгруппа", c)
 
-    # Sort subgroups by name for stable API
+        # 2b) Classic layout: group name merged across 3 columns (1-я | middle | 2-я),
+        #     but label "2 подгруппа" missing/unreadable — still expose rightmost col.
+        if end_col - start_col >= 2 and len(found) == 1:
+            second_col = end_col
+            if not any(col == second_col for _, col in found):
+                add_track("2 подгруппа", second_col)
+
+        # 2c) Multi-col group header (И-125 over 13–15), only one track so far
+        if len(found) == 1 and end_col > start_col:
+            base_col = found[0][1]
+            for c in (end_col, start_col + 2, end_col - 1):
+                if c <= start_col or c > end_col:
+                    continue
+                if any(col == c for _, col in found):
+                    continue
+                if _column_looks_like_schedule_track(sheet, c) or _columns_have_different_lessons(
+                    sheet, base_col, c
+                ):
+                    add_track("2 подгруппа", c)
+                    break
+            if len(found) == 1 and end_col != base_col:
+                add_track("2 подгруппа", end_col)
+
+        # 2d) Catch "2 подгруппа" labels that sit under empty group-name cells
+        #     (between this group's start and the next group anchor).
+        if len(found) < 2:
+            for c in range(start_col + 1, block_end + 1):
+                if any(col == c for _, col in found):
+                    continue
+                gn = extract_group_name(sheet.get_text_with_merged(2, c))
+                if gn and gn != group_name:
+                    break
+                sub = extract_subgroup(sheet.get_text_with_merged(3, c))
+                if sub:
+                    add_track(sub, c)
+
+        # 2e) Informatics groups (И-xxx) almost always have 1-я and 2-я columns
+        #     (name merge over 3 cols, or 2-я label two columns to the right).
+        if len(found) == 1 and group_name.startswith("И"):
+            for c in (start_col + 2, start_col + 1, end_col, start_col + 3):
+                if c <= start_col or c > block_end:
+                    continue
+                if any(col == c for _, col in found):
+                    continue
+                add_track("2 подгруппа", c)
+                break
+
+        # 3) Still nothing — single column for the group
+        if not found:
+            add_track("1 подгруппа", start_col)
+
+        for name, c in found:
+            # Skip if this column already registered for the group
+            if any(s.column == c for s in groups[group_name].subgroups):
+                continue
+            if not any(s.name == name for s in groups[group_name].subgroups):
+                groups[group_name].subgroups.append(SubgroupInfo(name=name, column=c))
+            else:
+                # Name already used (another block) — keep column under a free label
+                used = {s.name for s in groups[group_name].subgroups}
+                for n in range(1, 8):
+                    candidate = f"{n} подгруппа"
+                    if candidate not in used:
+                        groups[group_name].subgroups.append(
+                            SubgroupInfo(name=candidate, column=c)
+                        )
+                        break
+
     for info in groups.values():
-        info.subgroups.sort(key=lambda s: s.name)
+        by_col: Dict[int, SubgroupInfo] = {}
+        for s in info.subgroups:
+            if s.column not in by_col:
+                by_col[s.column] = s
+        info.subgroups = sorted(by_col.values(), key=lambda s: (s.name, s.column))
 
     return groups
 

@@ -7,36 +7,40 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+// Light theme keeps classic KGTA look: blue screens, white cards.
+// (Home/Teachers/Reminders/Campus use BlueKGTA as page background.)
 private val LightColors = lightColorScheme(
     primary = BlueKGTA,
     onPrimary = Color.White,
-    primaryContainer = BlueKGTALight,
+    primaryContainer = BlueKGTA,
     onPrimaryContainer = Color.White,
     secondary = AccentGold,
     onSecondary = BlueKGTADark,
-    background = SurfaceLight,
-    onBackground = TextPrimary,
+    background = BlueKGTA,
+    onBackground = Color.White,
     surface = SurfaceCard,
     onSurface = TextPrimary,
-    surfaceVariant = Color(0xFFE8ECF2),
+    surfaceVariant = Color(0xFFF0F3F8),
     onSurfaceVariant = TextSecondary,
+    outline = Color(0xFFCCD5E0),
     error = ErrorRed,
     onError = Color.White,
 )
 
 private val DarkColors = darkColorScheme(
-    primary = BlueKGTALight,
-    onPrimary = Color.White,
-    primaryContainer = BlueKGTA,
-    onPrimaryContainer = Color.White,
+    primary = Color(0xFF7B9FD4),
+    onPrimary = DarkNavy,
+    primaryContainer = DarkButton,
+    onPrimaryContainer = DarkOnSurface,
     secondary = AccentGold,
-    onSecondary = Color.Black,
-    background = BlueKGTADark,
-    onBackground = Color.White,
-    surface = Color(0xFF162447),
-    onSurface = Color.White,
-    surfaceVariant = Color(0xFF1E2F55),
-    onSurfaceVariant = Color(0xFFB8C2D4),
+    onSecondary = DarkNavy,
+    background = DarkNavy,
+    onBackground = DarkOnSurface,
+    surface = DarkSurface,
+    onSurface = DarkOnSurface,
+    surfaceVariant = DarkCard,
+    onSurfaceVariant = DarkOnSurfaceMuted,
+    outline = DarkButtonBorder,
     error = Color(0xFFFF6B6B),
     onError = Color.Black,
 )

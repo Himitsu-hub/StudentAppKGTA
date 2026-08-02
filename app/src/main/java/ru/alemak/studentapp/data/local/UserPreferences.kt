@@ -3,6 +3,7 @@ package ru.alemak.studentapp.data.local
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -36,18 +37,36 @@ class UserPreferences @Inject constructor(
         )
     }
 
+    /** true = dark theme */
+    val darkTheme: Flow<Boolean> = store.data.map { it[Keys.DARK_THEME] == true }
+
+    /** First-launch wizard completed (group chosen). */
+    val onboardingDone: Flow<Boolean> = store.data.map { prefs ->
+        prefs[Keys.ONBOARDING_DONE] == true || !prefs[Keys.GROUP].isNullOrBlank()
+    }
+
     suspend fun save(course: Int, group: String?, subgroup: String?) {
         store.edit { prefs ->
             prefs[Keys.COURSE] = course
             if (group != null) prefs[Keys.GROUP] = group else prefs.remove(Keys.GROUP)
             if (subgroup != null) prefs[Keys.SUBGROUP] = subgroup else prefs.remove(Keys.SUBGROUP)
+            if (!group.isNullOrBlank()) {
+                prefs[Keys.ONBOARDING_DONE] = true
+            }
         }
+    }
+
+    suspend fun setDarkTheme(enabled: Boolean) {
+        store.edit { prefs -> prefs[Keys.DARK_THEME] = enabled }
+    }
+
+    suspend fun setOnboardingDone(done: Boolean) {
+        store.edit { prefs -> prefs[Keys.ONBOARDING_DONE] = done }
     }
 
     suspend fun getSelectedCourse(): Int =
         store.data.map { it[Keys.COURSE] ?: 1 }.first()
 
-    /** Last known server version string for a course (empty = never seen). */
     suspend fun getScheduleVersion(course: Int): String =
         store.data.map { it[scheduleVersionKey(course)].orEmpty() }.first()
 
@@ -64,5 +83,7 @@ class UserPreferences @Inject constructor(
         val COURSE = intPreferencesKey("selected_course")
         val GROUP = stringPreferencesKey("selected_group")
         val SUBGROUP = stringPreferencesKey("selected_subgroup")
+        val DARK_THEME = booleanPreferencesKey("dark_theme")
+        val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
     }
 }

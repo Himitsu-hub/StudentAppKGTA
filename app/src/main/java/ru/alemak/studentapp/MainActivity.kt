@@ -10,10 +10,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import ru.alemak.studentapp.ui.navigation.AppNavigation
+import ru.alemak.studentapp.ui.navigation.ThemeViewModel
 import ru.alemak.studentapp.ui.theme.StudentAppTheme
 import ru.alemak.studentapp.updates.ScheduleUpdateScheduler
 
@@ -22,19 +26,20 @@ class MainActivity : ComponentActivity() {
 
     private val requestNotifications = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { /* optional: user may deny */ }
+    ) { /* optional */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Switch from splash theme to normal app theme after process start
         setTheme(R.style.Theme_StudentApp)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         ensureNotificationPermission()
         ScheduleUpdateScheduler.schedule(this)
         setContent {
-            StudentAppTheme {
+            val themeViewModel: ThemeViewModel = hiltViewModel()
+            val dark by themeViewModel.darkTheme.collectAsStateWithLifecycle()
+            StudentAppTheme(darkTheme = dark) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    AppNavigation()
+                    AppNavigation(themeViewModel = themeViewModel)
                 }
             }
         }

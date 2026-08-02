@@ -6,10 +6,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./uploads:/app/uploads
-      - ./schedule.db:/app/schedule.db
-      - ./teachers.json:/app/teachers.json
-      - ./news_cache.json:/app/news_cache.json
+      # Host folder = live code. After scp, only restart container (no full rebuild needed).
+      - ./:/app
     env_file:
       - .env
     environment:

@@ -70,6 +70,7 @@ fun AppTopBar(
     onBack: (() -> Unit)? = null,
     onRefresh: (() -> Unit)? = null,
 ) {
+    val scheme = MaterialTheme.colorScheme
     TopAppBar(
         title = {
             Text(title, fontWeight = FontWeight.Bold)
@@ -89,25 +90,28 @@ fun AppTopBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = BlueKGTA,
-            titleContentColor = Color.White,
-            navigationIconContentColor = Color.White,
-            actionIconContentColor = Color.White,
+            // Light: classic blue bar; Dark: dark surface
+            containerColor = if (scheme.background == BlueKGTA) BlueKGTA else scheme.surface,
+            titleContentColor = if (scheme.background == BlueKGTA) Color.White else scheme.onSurface,
+            navigationIconContentColor = if (scheme.background == BlueKGTA) Color.White else scheme.onSurface,
+            actionIconContentColor = if (scheme.background == BlueKGTA) Color.White else scheme.onSurface,
         ),
     )
 }
 
 @Composable
 fun LoadingState(message: String = "Загрузка…") {
+    val scheme = MaterialTheme.colorScheme
+    val onBlue = scheme.background == BlueKGTA
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        CircularProgressIndicator(color = BlueKGTA)
+        CircularProgressIndicator(color = if (onBlue) Color.White else scheme.primary)
         Spacer(Modifier.height(16.dp))
-        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(message, color = if (onBlue) Color.White.copy(alpha = 0.85f) else scheme.onSurfaceVariant)
     }
 }
 
@@ -142,15 +146,18 @@ fun ErrorState(message: String, onRetry: (() -> Unit)? = null) {
 
 @Composable
 fun EmptyState(title: String, subtitle: String) {
+    val scheme = MaterialTheme.colorScheme
+    val onBlue = scheme.background == BlueKGTA
+    val color = if (onBlue) Color.White.copy(alpha = 0.9f) else scheme.onSurfaceVariant
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(title, fontWeight = FontWeight.Bold, color = color)
         Spacer(Modifier.height(8.dp))
-        Text(subtitle, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(subtitle, textAlign = TextAlign.Center, color = color.copy(alpha = 0.85f))
     }
 }
 

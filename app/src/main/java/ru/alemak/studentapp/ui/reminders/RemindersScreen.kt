@@ -7,6 +7,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,6 +40,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -84,6 +86,7 @@ fun RemindersScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val reminders by viewModel.reminders.collectAsStateWithLifecycle()
+    val scheme = MaterialTheme.colorScheme
 
     var editor by remember { mutableStateOf<Reminder?>(null) }
     var completeCandidate by remember { mutableStateOf<Reminder?>(null) }
@@ -96,7 +99,6 @@ fun RemindersScreen(
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
-    // State that re-reads after system permission dialog
     var hasNotifPermission by remember { mutableStateOf(checkNotificationPermission()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -112,7 +114,6 @@ fun RemindersScreen(
         }
     }
 
-    // When user returns from system settings / permission dialog — refresh banner
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -125,7 +126,9 @@ fun RemindersScreen(
 
     Scaffold(
         topBar = { AppTopBar(title = "Напоминания", onBack = onBack) },
+        containerColor = scheme.background,
         floatingActionButton = {
+            val onBlue = scheme.background == BlueKGTA
             FloatingActionButton(
                 onClick = {
                     if (!hasNotifPermission) {
@@ -138,8 +141,8 @@ fun RemindersScreen(
                         dateTimeMillis = System.currentTimeMillis() + 60_000,
                     )
                 },
-                containerColor = Color.White,
-                contentColor = BlueKGTA,
+                containerColor = if (onBlue) Color.White else scheme.primaryContainer,
+                contentColor = if (onBlue) BlueKGTA else scheme.onPrimaryContainer,
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Добавить")
             }
@@ -149,7 +152,7 @@ fun RemindersScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(BlueKGTA)
+                .background(scheme.background)
                 .padding(16.dp),
         ) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotifPermission) {
@@ -192,46 +195,62 @@ fun RemindersScreen(
     completeCandidate?.let { reminder ->
         AlertDialog(
             onDismissRequest = { completeCandidate = null },
-            title = { Text("Завершить напоминание?") },
-            text = { Text("Удалить «${reminder.text}»?") },
+            title = { Text("Завершить напоминание?", color = scheme.onSurface) },
+            text = { Text("Удалить «${reminder.text}»?", color = scheme.onSurfaceVariant) },
             confirmButton = {
-                Button(onClick = {
-                    viewModel.delete(reminder)
-                    completeCandidate = null
-                }) {
+                Button(
+                    onClick = {
+                        viewModel.delete(reminder)
+                        completeCandidate = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = scheme.primary,
+                        contentColor = scheme.onPrimary,
+                    ),
+                ) {
                     Icon(Icons.Default.Check, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Да")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { completeCandidate = null }) { Text("Отмена") }
+                TextButton(onClick = { completeCandidate = null }) {
+                    Text("Отмена", color = scheme.primary)
+                }
             },
+            containerColor = scheme.surface,
         )
     }
 }
 
 @Composable
 private fun PermissionCard(onRequest: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)),
+        colors = CardDefaults.cardColors(containerColor = scheme.tertiaryContainer),
         shape = RoundedCornerShape(12.dp),
     ) {
         Row(
             Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFF856404))
+            Icon(Icons.Default.Info, contentDescription = null, tint = scheme.onTertiaryContainer)
             Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Нужны уведомления", fontWeight = FontWeight.Bold, color = Color(0xFF856404))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Нужны уведомления",
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.onTertiaryContainer,
+                )
                 Text(
                     "Без разрешения напоминания не сработают",
-                    color = Color(0xFF856404),
+                    color = scheme.onTertiaryContainer,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            TextButton(onClick = onRequest) { Text("Разрешить") }
+            TextButton(onClick = onRequest) {
+                Text("Разрешить", color = scheme.primary)
+            }
         }
     }
 }
@@ -242,6 +261,7 @@ private fun ReminderRow(
     onEdit: () -> Unit,
     onComplete: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val formatter = remember {
         SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     }
@@ -250,8 +270,9 @@ private fun ReminderRow(
             .fillMaxWidth()
             .clickable(onClick = onEdit),
         shape = RoundedCornerShape(16.dp),
-        color = Color.White,
-        shadowElevation = 4.dp,
+        color = scheme.surface,
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, scheme.outline.copy(alpha = 0.35f)),
     ) {
         Row(
             Modifier.padding(16.dp),
@@ -261,16 +282,21 @@ private fun ReminderRow(
                 modifier = Modifier
                     .size(24.dp)
                     .clip(CircleShape)
-                    .border(2.dp, Color.Gray, CircleShape)
+                    .border(2.dp, scheme.outline, CircleShape)
                     .clickable(onClick = onComplete),
             )
             Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(reminder.text, fontWeight = FontWeight.Medium, fontSize = 16.sp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    reminder.text,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 16.sp,
+                    color = scheme.onSurface,
+                )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     formatter.format(Date(reminder.dateTimeMillis)),
-                    color = Color.Gray,
+                    color = scheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )
             }
@@ -285,6 +311,7 @@ private fun ReminderEditorDialog(
     onSave: (text: String, dateTimeMillis: Long) -> Unit,
 ) {
     val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
     val isEditing = reminder.text.isNotBlank()
     var text by remember { mutableStateOf(reminder.text) }
 
@@ -298,12 +325,13 @@ private fun ReminderEditorDialog(
     var minute by remember { mutableIntStateOf(calendar.get(Calendar.MINUTE)) }
 
     Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), color = Color.White) {
+        Surface(shape = RoundedCornerShape(16.dp), color = scheme.surface) {
             Column(modifier = Modifier.padding(16.dp).width(320.dp)) {
                 Text(
                     if (isEditing) "Редактировать" else "Новое напоминание",
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
+                    color = scheme.onSurface,
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
@@ -312,17 +340,19 @@ private fun ReminderEditorDialog(
                     label = { Text("Текст") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        disabledTextColor = Color.Black,
-                        cursorColor = BlueKGTA,
-                        focusedLabelColor = Color.Gray,
-                        unfocusedLabelColor = Color.Gray,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = scheme.onSurface,
+                        unfocusedTextColor = scheme.onSurface,
+                        disabledTextColor = scheme.onSurfaceVariant,
+                        cursorColor = scheme.primary,
+                        focusedLabelColor = scheme.primary,
+                        unfocusedLabelColor = scheme.onSurfaceVariant,
+                        focusedBorderColor = scheme.primary,
+                        unfocusedBorderColor = scheme.outline,
                     ),
                 )
                 Spacer(Modifier.height(12.dp))
-                Text("Дата и время", fontWeight = FontWeight.Medium)
+                Text("Дата и время", fontWeight = FontWeight.Medium, color = scheme.onSurface)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(
@@ -343,10 +373,17 @@ private fun ReminderEditorDialog(
                                 ).show()
                             },
                         shape = RoundedCornerShape(8.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray),
+                        color = scheme.surfaceVariant,
+                        border = BorderStroke(1.dp, scheme.outline),
                     ) {
-                        Box(Modifier.fillMaxSize().padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
-                            Text("%02d.%02d.%04d".format(day, month + 1, year))
+                        Box(
+                            Modifier.fillMaxSize().padding(start = 12.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            Text(
+                                "%02d.%02d.%04d".format(day, month + 1, year),
+                                color = scheme.onSurface,
+                            )
                         }
                     }
                     Surface(
@@ -366,16 +403,25 @@ private fun ReminderEditorDialog(
                                 ).show()
                             },
                         shape = RoundedCornerShape(8.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray),
+                        color = scheme.surfaceVariant,
+                        border = BorderStroke(1.dp, scheme.outline),
                     ) {
-                        Box(Modifier.fillMaxSize().padding(start = 12.dp), contentAlignment = Alignment.CenterStart) {
-                            Text("%02d:%02d".format(hour, minute))
+                        Box(
+                            Modifier.fillMaxSize().padding(start = 12.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            Text(
+                                "%02d:%02d".format(hour, minute),
+                                color = scheme.onSurface,
+                            )
                         }
                     }
                 }
                 Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Отмена") }
+                    TextButton(onClick = onDismiss) {
+                        Text("Отмена", color = scheme.primary)
+                    }
                     Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = {
@@ -394,7 +440,10 @@ private fun ReminderEditorDialog(
                             onSave(text.trim(), millis)
                         },
                         enabled = text.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(containerColor = BlueKGTA),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = scheme.primary,
+                            contentColor = scheme.onPrimary,
+                        ),
                     ) {
                         Text(if (isEditing) "Сохранить" else "Добавить")
                     }

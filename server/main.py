@@ -2,6 +2,7 @@ import os
 import json
 import secrets
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -24,6 +25,7 @@ from parser import (
     parse_schedule_for_group,
     schedule_to_dict,
 )
+from schedule_validator import validate_schedule_file
 
 load_dotenv()
 
@@ -234,46 +236,125 @@ def schedule_updates():
     }
 
 
+@app.get("/api/groups-debug")
+def get_groups_debug(course: int = Query(..., ge=1, le=4)):
+    """Temporary diagnostics: how the parser sees the Excel header on the server."""
+    from parser import (
+        open_workbook,
+        close_workbook,
+        parse_groups_from_header,
+        extract_subgroup,
+        extract_group_name,
+        get_groups_from_file,
+    )
+
+    file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="file missing")
+
+    sheet, wb = open_workbook(str(file_path))
+    try:
+        row2 = {}
+        row3 = {}
+        for c in range(min(40, sheet.max_column)):
+            t2 = sheet.get_cell_text(2, c)
+            if t2:
+                row2[str(c)] = t2
+            r3 = sheet.get_cell_text(3, c)
+            m3 = sheet.get_text_with_merged(3, c)
+            if r3 or m3:
+                row3[str(c)] = {
+                    "raw": r3,
+                    "merged": m3,
+                    "subgroup": extract_subgroup(m3 or r3),
+                }
+        merges = []
+        for mg in sheet.merged_ranges:
+            if mg["min_row"] <= 3 and mg["max_row"] >= 2 and mg["min_col"] <= 35:
+                merges.append(
+                    {
+                        "rows": [mg["min_row"], mg["max_row"]],
+                        "cols": [mg["min_col"], mg["max_col"]],
+                        "val": sheet.get_cell_text(mg["min_row"], mg["min_col"]),
+                    }
+                )
+        parsed = {
+            name: [(s.name, s.column) for s in info.subgroups]
+            for name, info in parse_groups_from_header(sheet).items()
+        }
+        # sample: does col 15 have own lessons vs 13?
+        diffs = []
+        for row in range(4, 40):
+            a = sheet.get_cell_text(row, 13)
+            b = sheet.get_cell_text(row, 15)
+            if a or b:
+                diffs.append(
+                    {
+                        "row": row,
+                        "c13_raw": (a or "")[:50],
+                        "c15_raw": (b or "")[:50],
+                    }
+                )
+                if len(diffs) >= 12:
+                    break
+        return {
+            "file": str(file_path),
+            "size": file_path.stat().st_size,
+            "is_xls": sheet.is_xls,
+            "groups_api": get_groups_from_file(str(file_path)),
+            "parsed_columns": parsed,
+            "row2": row2,
+            "row3": row3,
+            "header_merges": merges,
+            "sample_c13_c15": diffs,
+        }
+    finally:
+        close_workbook(sheet, wb)
+
+
 @app.get("/api/groups")
 def get_groups(course: int = Query(..., ge=1, le=4), db: Session = Depends(get_db)):
+    """
+    Always re-read groups from Excel with the current parser when the file exists.
+    (Old SQLite GroupsCache often kept a stale list, e.g. И-125 with only 1 subgroup.)
+    """
     file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
 
-    # Prefer DB cache, but never fail hard — Excel is always a fallback
+    if file_path.exists():
+        try:
+            groups = get_groups_from_file(str(file_path))
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Parse error: {exc}") from exc
+
+        try:
+            existing = db.query(GroupsCache).filter(GroupsCache.course == course).first()
+            if existing:
+                existing.groups_json = groups
+            else:
+                db.add(GroupsCache(course=course, groups_json=groups))
+            db.commit()
+        except Exception as exc:
+            print(f"[groups] cache write failed: {exc}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+        return groups
+
+    # No Excel on disk — last resort: SQLite cache
     try:
-        ensure_course_indexed(db, course)
         cached = db.query(GroupsCache).filter(GroupsCache.course == course).first()
         if cached and cached.groups_json:
             return cached.groups_json
     except Exception as exc:
-        print(f"[groups] index/cache error course={course}: {exc}")
+        print(f"[groups] cache read error course={course}: {exc}")
         try:
             db.rollback()
         except Exception:
             pass
 
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"Schedule for course {course} not found")
-
-    try:
-        groups = get_groups_from_file(str(file_path))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Parse error: {exc}") from exc
-
-    try:
-        existing = db.query(GroupsCache).filter(GroupsCache.course == course).first()
-        if existing:
-            existing.groups_json = groups
-        else:
-            db.add(GroupsCache(course=course, groups_json=groups))
-        db.commit()
-    except Exception as exc:
-        print(f"[groups] cache write failed: {exc}")
-        try:
-            db.rollback()
-        except Exception:
-            pass
-
-    return groups
+    raise HTTPException(status_code=404, detail=f"Schedule for course {course} not found")
 
 
 @app.get("/api/schedule")
@@ -345,23 +426,71 @@ def get_schedule(
     }
 
 
+@app.post("/admin/validate")
+async def validate_schedule(
+    file: UploadFile = File(...),
+    password: str = Form(...),
+    course: Optional[int] = Form(None),
+):
+    """Check Excel for parse issues without publishing to production cache."""
+    verify_admin_password(password)
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Нужен файл .xlsx или .xls")
+
+    suffix = Path(file.filename).suffix or ".xlsx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = tmp.name
+    try:
+        result = validate_schedule_file(tmp_path)
+        result["filename"] = file.filename
+        if course is not None:
+            result["course"] = course
+        return result
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
 @app.post("/admin/upload")
 async def upload_schedule(
     course: int = Form(..., ge=1, le=4),
     file: UploadFile = File(...),
     password: str = Form(...),
     db: Session = Depends(get_db),
+    skip_validate: str = Form("false"),
 ):
     verify_admin_password(password)
 
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only Excel files are accepted")
 
-    file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    do_skip = str(skip_validate).lower() in ("1", "true", "yes", "on")
 
+    # Save to temp first → validate → then publish
+    suffix = Path(file.filename).suffix or ".xlsx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = tmp.name
+
+    validation = None
     try:
+        if not do_skip:
+            validation = validate_schedule_file(tmp_path)
+            if validation.get("errors"):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "message": "Файл не прошёл проверку",
+                        "validation": validation,
+                    },
+                )
+
+        file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
+        shutil.copy2(tmp_path, file_path)
+
         total_groups, total_lessons = index_course_file(db, course, file.filename)
         log = UploadLog(
             filename=file.filename,
@@ -378,7 +507,10 @@ async def upload_schedule(
             "course": course,
             "groups_count": total_groups,
             "lessons_count": total_lessons,
+            "validation": validation,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         log = UploadLog(
             filename=file.filename,
@@ -389,6 +521,11 @@ async def upload_schedule(
         db.add(log)
         db.commit()
         raise HTTPException(status_code=500, detail=f"Parse error: {str(e)}") from e
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 @app.get("/admin/status")
@@ -418,100 +555,238 @@ def admin_status(
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_panel():
-    """Admin UI — password is entered in the form, never in the URL."""
-    html = """
+    """Admin UI for schedule staff — no SSH required."""
+    html = r"""
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StudentApp Admin</title>
-    <style>
-        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f4f6f8; color: #1a1a1a; }
-        h1 { color: #1a336c; }
-        .card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); margin: 20px 0; }
-        label { display: block; margin: 12px 0 6px; font-weight: 600; }
-        select, input { padding: 10px; width: 100%; box-sizing: border-box; border: 1px solid #ccd; border-radius: 8px; }
-        button { background: #1a336c; color: white; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; margin-top: 16px; font-weight: 600; }
-        button:hover { background: #142650; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { border: 1px solid #e2e6ea; padding: 10px; text-align: left; font-size: 14px; }
-        th { background: #1a336c; color: white; }
-        .ok { color: #1b7a3d; } .err { color: #b42318; }
-        #result { margin-top: 12px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Загрузка расписания — StudentApp</title>
+<style>
+  :root { --blue:#1a336c; --bg:#eef2f7; --ok:#1b7a3d; --err:#b42318; --warn:#b54708; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; max-width: 920px; margin: 0 auto; padding: 24px 16px 48px; background: var(--bg); color: #1a1a1a; }
+  h1 { color: var(--blue); margin: 0 0 8px; font-size: 1.6rem; }
+  .sub { color: #5f6b7a; margin-bottom: 20px; line-height: 1.45; }
+  .card { background: #fff; padding: 20px; border-radius: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.06); margin: 16px 0; }
+  label { display: block; margin: 10px 0 6px; font-weight: 600; font-size: 14px; }
+  input[type=password], input[type=file] { width: 100%; padding: 10px 12px; border: 1px solid #c5ced9; border-radius: 10px; font-size: 15px; }
+  .row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 700px) { .row { grid-template-columns: 1fr 1fr; } }
+  .course-box { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; background: #fafbfc; }
+  .course-box h3 { margin: 0 0 10px; color: var(--blue); font-size: 1rem; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  button { background: var(--blue); color: #fff; border: none; border-radius: 10px; padding: 11px 16px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  button.secondary { background: #fff; color: var(--blue); border: 1.5px solid var(--blue); }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  button.danger { background: var(--err); }
+  .ok { color: var(--ok); } .err { color: var(--err); } .warn { color: var(--warn); }
+  .report { font-size: 13px; margin-top: 10px; line-height: 1.4; max-height: 220px; overflow: auto; white-space: pre-wrap; background: #f4f6f8; padding: 10px; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  th, td { border: 1px solid #e2e6ea; padding: 8px; text-align: left; }
+  th { background: var(--blue); color: #fff; }
+  .hint { font-size: 13px; color: #5f6b7a; margin-top: 8px; }
+</style>
 </head>
 <body>
-    <h1>StudentApp Admin</h1>
-    <div class="card">
-        <h2>Загрузка расписания</h2>
-        <form id="uploadForm">
-            <label>Курс</label>
-            <select id="course">
-                <option value="1">1 курс</option>
-                <option value="2">2 курс</option>
-                <option value="3">3 курс</option>
-                <option value="4">4 курс</option>
-            </select>
-            <label>Excel-файл (.xlsx)</label>
-            <input type="file" id="file" accept=".xlsx,.xls" required>
-            <label>Пароль администратора</label>
-            <input type="password" id="password" required autocomplete="current-password">
-            <button type="submit">Загрузить и проиндексировать</button>
-        </form>
-        <div id="result"></div>
+  <h1>Расписание → приложение</h1>
+  <p class="sub">Для сотрудника, который готовит Excel. Пароль один раз, файлы по курсам — проверить, потом опубликовать. SSH и консоль не нужны.</p>
+
+  <div class="card">
+    <label>Пароль администратора</label>
+    <input type="password" id="password" autocomplete="current-password" placeholder="Пароль из .env сервера">
+    <p class="hint">Пароль не попадает в адресную строку. Сохраните его только у УМУ / ответственного.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;color:var(--blue);font-size:1.15rem;">Файлы по курсам</h2>
+    <p class="hint">1) Выберите Excel → 2) «Проверить» → 3) «Опубликовать» (или «Опубликовать все проверенные»).</p>
+    <div class="row" id="courses"></div>
+    <div class="btns" style="margin-top:16px;">
+      <button type="button" id="btnValidateAll" class="secondary">Проверить все выбранные</button>
+      <button type="button" id="btnPublishAll">Опубликовать все проверенные</button>
     </div>
-    <div class="card">
-        <h2>История загрузок</h2>
-        <button type="button" id="refreshBtn">Обновить историю</button>
-        <table>
-            <thead><tr><th>Дата</th><th>Файл</th><th>Курс</th><th>Групп</th><th>Пар</th><th>Статус</th></tr></thead>
-            <tbody id="historyBody"></tbody>
-        </table>
-    </div>
-    <script>
-        async function loadHistory() {
-            const pw = document.getElementById('password').value;
-            if (!pw) return;
-            const res = await fetch('/admin/status', {
-                headers: { 'X-Admin-Password': pw }
-            });
-            if (!res.ok) return;
-            const data = await res.json();
-            const tbody = document.getElementById('historyBody');
-            tbody.innerHTML = '';
-            (data.uploads || []).forEach(u => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${u.uploaded_at ? new Date(u.uploaded_at).toLocaleString() : ''}</td>
-                    <td>${u.filename || ''}</td><td>${u.course}</td><td>${u.groups_count}</td>
-                    <td>${u.lessons_count}</td>
-                    <td class="${u.status === 'success' ? 'ok' : 'err'}">${u.status}</td>`;
-                tbody.appendChild(tr);
-            });
-        }
-        document.getElementById('refreshBtn').addEventListener('click', loadHistory);
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData();
-            formData.append('course', document.getElementById('course').value);
-            formData.append('file', document.getElementById('file').files[0]);
-            formData.append('password', document.getElementById('password').value);
-            const div = document.getElementById('result');
-            div.textContent = 'Загрузка...';
-            try {
-                const res = await fetch('/admin/upload', { method: 'POST', body: formData });
-                const data = await res.json();
-                if (res.ok) {
-                    div.innerHTML = `<p class="ok">Готово. Групп: ${data.groups_count}, пар: ${data.lessons_count}</p>`;
-                    loadHistory();
-                } else {
-                    div.innerHTML = `<p class="err">Ошибка: ${data.detail || res.status}</p>`;
-                }
-            } catch (err) {
-                div.innerHTML = '<p class="err">Сетевая ошибка</p>';
-            }
-        });
-    </script>
+    <div id="globalLog" class="report" style="display:none;"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;color:var(--blue);font-size:1.15rem;">История</h2>
+    <button type="button" id="refreshBtn" class="secondary">Обновить историю</button>
+    <table>
+      <thead><tr><th>Дата</th><th>Файл</th><th>Курс</th><th>Групп</th><th>Пар</th><th>Статус</th></tr></thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </div>
+
+<script>
+const state = {}; // course -> { file, validation, reportEl }
+
+function pw() { return document.getElementById('password').value || ''; }
+
+function ensurePw() {
+  if (!pw()) { alert('Сначала введите пароль администратора'); return false; }
+  return true;
+}
+
+function renderCourses() {
+  const root = document.getElementById('courses');
+  root.innerHTML = '';
+  for (let c = 1; c <= 4; c++) {
+    const box = document.createElement('div');
+    box.className = 'course-box';
+    box.innerHTML = `
+      <h3>${c} курс</h3>
+      <input type="file" id="file${c}" accept=".xlsx,.xls">
+      <div class="btns">
+        <button type="button" class="secondary" data-act="validate" data-c="${c}">Проверить</button>
+        <button type="button" data-act="publish" data-c="${c}">Опубликовать</button>
+      </div>
+      <div class="report" id="rep${c}" style="display:none;"></div>`;
+    root.appendChild(box);
+    state[c] = { validation: null };
+  }
+  root.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = +btn.dataset.c;
+      if (btn.dataset.act === 'validate') validateOne(c);
+      else publishOne(c);
+    });
+  });
+}
+
+function showReport(c, html, kind) {
+  const el = document.getElementById('rep' + c);
+  el.style.display = 'block';
+  el.className = 'report ' + (kind || '');
+  el.innerHTML = html;
+}
+
+function formatValidation(v) {
+  if (!v) return '';
+  const st = v.stats || {};
+  let h = '';
+  if (v.ok) h += `<div class="ok"><b>Проверка пройдена</b> · названий групп: ${st.groups || 0}, столбцов (треков) расписания: ${st.subgroups || 0}</div>`;
+  else h += `<div class="err"><b>Есть ошибки</b></div>`;
+  if (v.validator_version) h += `<div class="hint">Версия проверки: <code>${v.validator_version}</code></div>`;
+  if (st.breakdown && st.breakdown.length) {
+    h += `<div class="hint" style="margin-top:8px"><b>Как посчитано:</b><br>`;
+    st.breakdown.forEach(b => {
+      h += `• <b>${b.group}</b> — ${b.count} столбца: ${(b.subgroups || []).join(', ')}<br>`;
+    });
+    h += `«Подгруппа» здесь = отдельный столбец в Excel.</div>`;
+  }
+  if (st.debug_N49) {
+    const d = st.debug_N49;
+    h += `<div class="hint" style="margin-top:8px;border:1px solid #ccd;padding:8px;border-radius:8px">`;
+    h += `<b>Диагностика N49</b> (чтобы понять merge)<br>`;
+    h += `N49: ${d.N49_raw ? d.N49_raw : '(пусто)'}<br>`;
+    h += `P49: ${d.P49_raw ? d.P49_raw : '(пусто)'}<br>`;
+    h += `N50: ${d.N50_raw ? d.N50_raw : '(пусто)'}<br>`;
+    h += `P50: ${d.P50_raw ? d.P50_raw : '(пусто)'}<br>`;
+    h += `has_merge: <b>${d.has_merge}</b><br>`;
+    h += `<i>${d.note || ''}</i></div>`;
+  }
+  (v.errors || []).forEach(e => { h += `<div class="err">✕ ${e}</div>`; });
+  (v.warnings || []).forEach(w => { h += `<div class="warn">⚠ ${w}</div>`; });
+  if (!(v.errors||[]).length && !(v.warnings||[]).length) h += `<div class="ok">Замечаний нет</div>`;
+  return h;
+}
+
+async function validateOne(c) {
+  if (!ensurePw()) return;
+  const f = document.getElementById('file' + c).files[0];
+  if (!f) { alert('Выберите файл для ' + c + ' курса'); return; }
+  showReport(c, 'Проверка…', '');
+  const fd = new FormData();
+  fd.append('password', pw());
+  fd.append('file', f);
+  fd.append('course', c);
+  try {
+    const res = await fetch('/admin/validate', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) {
+      showReport(c, '<span class="err">' + (data.detail || res.status) + '</span>', 'err');
+      state[c].validation = null;
+      return;
+    }
+    state[c].validation = data;
+    state[c].file = f;
+    showReport(c, formatValidation(data), data.ok ? 'ok' : 'err');
+  } catch (e) {
+    showReport(c, '<span class="err">Сеть: ' + e + '</span>', 'err');
+  }
+}
+
+async function publishOne(c, force) {
+  if (!ensurePw()) return;
+  const f = document.getElementById('file' + c).files[0];
+  if (!f) { alert('Выберите файл для ' + c + ' курса'); return; }
+  if (!state[c].validation && !force) {
+    const go = confirm('Файл ещё не проверен. Сначала проверить, потом опубликовать?\\nОК = только проверить, Отмена = отмена.');
+    if (go) { await validateOne(c); return; }
+    return;
+  }
+  if (state[c].validation && (state[c].validation.warnings||[]).length && !force) {
+    if (!confirm('Есть предупреждения. Всё равно опубликовать ' + c + ' курс?')) return;
+  }
+  showReport(c, 'Публикация…', '');
+  const fd = new FormData();
+  fd.append('password', pw());
+  fd.append('file', f);
+  fd.append('course', c);
+  if (force) fd.append('skip_validate', 'true');
+  try {
+    const res = await fetch('/admin/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (res.ok) {
+      let h = `<div class="ok"><b>Опубликовано</b> · групп: ${data.groups_count}, пар: ${data.lessons_count}</div>`;
+      if (data.validation) h += formatValidation(data.validation);
+      showReport(c, h, 'ok');
+      loadHistory();
+    } else {
+      const d = data.detail;
+      let msg = typeof d === 'object' ? JSON.stringify(d) : (d || res.status);
+      if (d && d.validation) msg = formatValidation(d.validation);
+      showReport(c, '<span class="err">Ошибка публикации</span><br>' + msg, 'err');
+    }
+  } catch (e) {
+    showReport(c, '<span class="err">Сеть: ' + e + '</span>', 'err');
+  }
+}
+
+document.getElementById('btnValidateAll').onclick = async () => {
+  for (let c = 1; c <= 4; c++) {
+    if (document.getElementById('file' + c).files[0]) await validateOne(c);
+  }
+};
+document.getElementById('btnPublishAll').onclick = async () => {
+  if (!ensurePw()) return;
+  if (!confirm('Опубликовать все курсы, для которых выбран файл?')) return;
+  for (let c = 1; c <= 4; c++) {
+    if (document.getElementById('file' + c).files[0]) await publishOne(c, true);
+  }
+};
+
+async function loadHistory() {
+  if (!pw()) return;
+  const res = await fetch('/admin/status', { headers: { 'X-Admin-Password': pw() } });
+  if (!res.ok) return;
+  const data = await res.json();
+  const tbody = document.getElementById('historyBody');
+  tbody.innerHTML = '';
+  (data.uploads || []).forEach(u => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${u.uploaded_at ? new Date(u.uploaded_at).toLocaleString() : ''}</td>
+      <td>${u.filename || ''}</td><td>${u.course}</td><td>${u.groups_count}</td>
+      <td>${u.lessons_count}</td>
+      <td class="${u.status === 'success' ? 'ok' : 'err'}">${u.status}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+document.getElementById('refreshBtn').onclick = loadHistory;
+renderCourses();
+</script>
 </body>
 </html>
 """

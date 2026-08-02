@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,7 +58,6 @@ import ru.alemak.studentapp.ui.components.ErrorState
 import ru.alemak.studentapp.ui.components.LoadingState
 import ru.alemak.studentapp.ui.components.OfflineBanner
 import ru.alemak.studentapp.ui.theme.BlueKGTA
-// LoadingState used by list + detail screens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +67,7 @@ fun TeachersScreen(
     viewModel: TeachersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scheme = MaterialTheme.colorScheme
 
     Scaffold(
         topBar = {
@@ -76,12 +77,13 @@ fun TeachersScreen(
                 onRefresh = { viewModel.refresh() },
             )
         },
+        containerColor = scheme.background,
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(BlueKGTA),
+                .background(scheme.background),
         ) {
             OfflineBanner(visible = state.usingCachedData)
 
@@ -91,17 +93,21 @@ fun TeachersScreen(
                     onValueChange = viewModel::setQuery,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("Поиск по имени, предмету…") },
+                    placeholder = {
+                        Text("Поиск по имени, предмету…", color = scheme.onSurfaceVariant)
+                    },
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        disabledContainerColor = Color.White,
-                        focusedTextColor = Color(0xFF1A1A1A),
-                        unfocusedTextColor = Color(0xFF1A1A1A),
-                        focusedBorderColor = Color.Transparent,
+                        focusedContainerColor = scheme.surface,
+                        unfocusedContainerColor = scheme.surface,
+                        disabledContainerColor = scheme.surface,
+                        focusedTextColor = scheme.onSurface,
+                        unfocusedTextColor = scheme.onSurface,
+                        focusedBorderColor = scheme.outline,
                         unfocusedBorderColor = Color.Transparent,
-                        cursorColor = BlueKGTA,
+                        cursorColor = scheme.primary,
+                        focusedPlaceholderColor = scheme.onSurfaceVariant,
+                        unfocusedPlaceholderColor = scheme.onSurfaceVariant,
                     ),
                 )
 
@@ -121,10 +127,14 @@ fun TeachersScreen(
                                 Text(dept, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
                             },
                             colors = FilterChipDefaults.filterChipColors(
-                                containerColor = Color.White.copy(alpha = 0.2f),
-                                labelColor = Color.White,
-                                selectedContainerColor = Color.White,
-                                selectedLabelColor = BlueKGTA,
+                                containerColor = if (scheme.background == BlueKGTA) {
+                                    Color.White.copy(alpha = 0.2f)
+                                } else {
+                                    scheme.surfaceVariant
+                                },
+                                labelColor = if (scheme.background == BlueKGTA) Color.White else scheme.onSurfaceVariant,
+                                selectedContainerColor = if (scheme.background == BlueKGTA) Color.White else scheme.primaryContainer,
+                                selectedLabelColor = if (scheme.background == BlueKGTA) BlueKGTA else scheme.onPrimaryContainer,
                             ),
                             shape = RoundedCornerShape(20.dp),
                         )
@@ -134,7 +144,11 @@ fun TeachersScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = "${state.filtered.size} преподавателей",
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = if (scheme.background == ru.alemak.studentapp.ui.theme.BlueKGTA) {
+                        Color.White.copy(alpha = 0.75f)
+                    } else {
+                        scheme.onSurfaceVariant
+                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -160,26 +174,23 @@ fun TeachersScreen(
     }
 }
 
-// White cards need fixed dark text (system dark theme otherwise paints names white → invisible)
-private val TeacherNameColor = Color(0xFF1A1A1A)
-private val TeacherMetaColor = Color(0xFF5F6B7A)
-
 @Composable
 private fun TeacherRow(teacher: Teacher, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White, RoundedCornerShape(12.dp))
+            .background(scheme.surface, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TeacherAvatar(teacher, size = 56.dp)
         Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = teacher.name,
-                color = TeacherNameColor,
+                color = scheme.onSurface,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
                 maxLines = 2,
@@ -189,13 +200,12 @@ private fun TeacherRow(teacher: Teacher, onClick: () -> Unit) {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = teacher.position,
-                    color = TeacherMetaColor,
+                    color = scheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            // subjects/disciplines hidden — often empty from API
         }
     }
 }
@@ -209,6 +219,7 @@ fun TeacherDetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val teacher = state.teachers.find { it.name == teacherName }
     val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
 
     androidx.compose.runtime.LaunchedEffect(teacherName) {
         if (state.teachers.none { it.name == teacherName }) {
@@ -218,13 +229,14 @@ fun TeacherDetailScreen(
 
     Scaffold(
         topBar = { AppTopBar(title = "Преподаватель", onBack = onBack) },
+        containerColor = scheme.background,
     ) { padding ->
         if (state.isLoading && teacher == null) {
             Box(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .background(BlueKGTA),
+                    .background(scheme.background),
                 contentAlignment = Alignment.Center,
             ) {
                 LoadingState("Загрузка…")
@@ -236,10 +248,10 @@ fun TeacherDetailScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .background(BlueKGTA),
+                    .background(scheme.background),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Преподаватель не найден", color = Color.White)
+                Text("Преподаватель не найден", color = scheme.onBackground)
             }
             return@Scaffold
         }
@@ -248,7 +260,7 @@ fun TeacherDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(BlueKGTA)
+                .background(scheme.background)
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -261,9 +273,10 @@ fun TeacherDetailScreen(
                 Spacer(Modifier.height(12.dp))
                 TeacherAvatar(teacher, size = 120.dp)
                 Spacer(Modifier.height(16.dp))
+                val onBlue = scheme.background == BlueKGTA
                 Text(
                     teacher.name,
-                    color = Color.White,
+                    color = if (onBlue) Color.White else scheme.onBackground,
                     fontWeight = FontWeight.Bold,
                     fontSize = 22.sp,
                     textAlign = TextAlign.Center,
@@ -271,7 +284,7 @@ fun TeacherDetailScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(
                     teacher.position,
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = if (onBlue) Color.White.copy(alpha = 0.85f) else scheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(20.dp))
@@ -286,27 +299,30 @@ fun TeacherDetailScreen(
                                 clipboard.setPrimaryClip(ClipData.newPlainText("email", teacher.email))
                                 Toast.makeText(context, "Email скопирован", Toast.LENGTH_SHORT).show()
                             },
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = scheme.surface),
                     ) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("Email", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(teacher.email, color = Color(0xFF2980B9), fontWeight = FontWeight.Medium)
+                            Text("Email", color = scheme.onSurfaceVariant)
+                            Text(teacher.email, color = scheme.primary, fontWeight = FontWeight.Medium)
                             Text(
                                 "Нажмите, чтобы скопировать",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = scheme.onSurfaceVariant,
                             )
                         }
                     }
                     Spacer(Modifier.height(12.dp))
                 }
-                // disciplines block removed (data usually empty)
             }
 
             Button(
                 onClick = onBack,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = scheme.primaryContainer,
+                    contentColor = scheme.onPrimaryContainer,
+                ),
             ) {
                 Text("Назад")
             }
@@ -316,6 +332,7 @@ fun TeacherDetailScreen(
 
 @Composable
 private fun TeacherAvatar(teacher: Teacher, size: androidx.compose.ui.unit.Dp) {
+    val scheme = MaterialTheme.colorScheme
     if (teacher.photoUrl.isNotEmpty()) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
@@ -332,12 +349,12 @@ private fun TeacherAvatar(teacher: Teacher, size: androidx.compose.ui.unit.Dp) {
             modifier = Modifier
                 .size(size)
                 .clip(CircleShape)
-                .background(Color(0xFF1A5276)),
+                .background(scheme.primaryContainer),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 teacher.name.take(1),
-                color = Color.White,
+                color = scheme.onPrimaryContainer,
                 fontWeight = FontWeight.Bold,
                 fontSize = (size.value / 2.5f).sp,
             )

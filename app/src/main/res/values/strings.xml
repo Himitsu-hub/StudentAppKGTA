@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">КГТУ Студент</string>
+    <string name="widget_schedule_description">Числитель/знаменатель и следующая пара</string>
+    <string name="widget_schedule_title">Расписание КГТУ</string>
 </resources>

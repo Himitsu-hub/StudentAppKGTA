@@ -23,6 +23,7 @@ import ru.alemak.studentapp.data.repository.NewsRepository
 import ru.alemak.studentapp.data.repository.ScheduleRepository
 import ru.alemak.studentapp.util.DateUtils
 import ru.alemak.studentapp.util.NetworkMonitor
+import ru.alemak.studentapp.widget.ScheduleWidgetUpdater
 
 data class HomeUiState(
     val weekType: String = DateUtils.getCurrentWeekType(),
@@ -41,6 +42,7 @@ class HomeViewModel @Inject constructor(
     private val scheduleRepository: ScheduleRepository,
     private val newsRepository: NewsRepository,
     private val userPreferences: UserPreferences,
+    private val widgetUpdater: ScheduleWidgetUpdater,
     networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
@@ -128,6 +130,7 @@ class HomeViewModel @Inject constructor(
                     isLoadingLesson = false,
                 )
             }
+            widgetUpdater.updateAsync()
             result.isOffline
         } catch (e: Exception) {
             _uiState.update {
