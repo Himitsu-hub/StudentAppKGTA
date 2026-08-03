@@ -3,14 +3,23 @@ package ru.alemak.studentapp
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.os.Build
 import dagger.hilt.android.HiltAndroidApp
+import ru.alemak.studentapp.ui.theme.ThemePrefs
 import ru.alemak.studentapp.updates.ScheduleUpdateScheduler
 
 @HiltAndroidApp
 class StudentApp : Application() {
+
+    override fun attachBaseContext(base: Context) {
+        ThemePrefs.applyNightModeFromPrefs(base)
+        super.attachBaseContext(base)
+    }
+
     override fun onCreate() {
         super.onCreate()
+        ThemePrefs.applyNightModeFromPrefs(this)
         createReminderChannel()
         createScheduleUpdatesChannel()
         ScheduleUpdateScheduler.schedule(this)

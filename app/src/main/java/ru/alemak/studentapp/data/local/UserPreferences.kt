@@ -14,6 +14,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import ru.alemak.studentapp.ui.theme.ThemePrefs
 
 private val Context.userDataStore: DataStore<Preferences> by preferencesDataStore("user_prefs")
 
@@ -58,6 +59,9 @@ class UserPreferences @Inject constructor(
 
     suspend fun setDarkTheme(enabled: Boolean) {
         store.edit { prefs -> prefs[Keys.DARK_THEME] = enabled }
+        // Persist + switch launcher alias for next cold-start splash.
+        // Does NOT call setDefaultNightMode (that recreated Activity and crashed).
+        ThemePrefs.setDark(context, enabled)
     }
 
     suspend fun setOnboardingDone(done: Boolean) {

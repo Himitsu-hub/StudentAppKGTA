@@ -1,15 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Splash while process starts -->
-    <style name="Theme.StudentApp.Splash" parent="android:Theme.Material.Light.NoActionBar">
+    <!--
+      windowDisablePreview: hide system starting window (often stuck on light theme).
+      Real splash color is applied in MainActivity via setTheme + windowBackground.
+      Launcher aliases still set the correct theme for cold start from the home icon.
+    -->
+    <style name="Theme.StudentApp.Splash" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:windowBackground">@drawable/splash_background</item>
         <item name="android:statusBarColor">#1A336C</item>
         <item name="android:navigationBarColor">#1A336C</item>
-        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowSplashScreenBackground">#1A336C</item>
     </style>
 
-    <style name="Theme.StudentApp" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.StudentApp.SplashDark" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_background_dark</item>
+        <item name="android:statusBarColor">#0A1020</item>
+        <item name="android:navigationBarColor">#0A1020</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowSplashScreenBackground">#0A1020</item>
+    </style>
+
+    <style name="Theme.StudentApp" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:statusBarColor">#1A336C</item>
         <item name="android:navigationBarColor">#1A336C</item>
+        <item name="android:windowBackground">#1A336C</item>
+    </style>
+
+    <style name="Theme.StudentApp.Dark" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:statusBarColor">#0A1020</item>
+        <item name="android:navigationBarColor">#0A1020</item>
+        <item name="android:windowBackground">#0A1020</item>
     </style>
 </resources>
