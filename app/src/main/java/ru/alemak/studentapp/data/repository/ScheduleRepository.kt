@@ -9,6 +9,7 @@ import ru.alemak.studentapp.data.local.GroupsCacheEntity
 import ru.alemak.studentapp.data.local.ScheduleCacheEntity
 import ru.alemak.studentapp.data.local.ScheduleDao
 import ru.alemak.studentapp.data.model.Lesson
+import ru.alemak.studentapp.data.model.NextLessonInfo
 import ru.alemak.studentapp.data.model.ScheduleResult
 import ru.alemak.studentapp.data.remote.ScheduleApi
 import ru.alemak.studentapp.util.DateUtils
@@ -83,7 +84,10 @@ class ScheduleRepository @Inject constructor(
         return findNextLesson(result.schedule)
     }
 
-    fun findNextLesson(schedule: List<ru.alemak.studentapp.data.model.ScheduleDay>): Lesson? {
+    fun findNextLesson(schedule: List<ru.alemak.studentapp.data.model.ScheduleDay>): Lesson? =
+        findNextLessonInfo(schedule)?.lesson
+
+    fun findNextLessonInfo(schedule: List<ru.alemak.studentapp.data.model.ScheduleDay>): NextLessonInfo? {
         val now = Calendar.getInstance()
         val todayName = DateUtils.getTodayName()
         val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -91,6 +95,7 @@ class ScheduleRepository @Inject constructor(
         val todaySchedule = schedule.find { it.dayName.equals(todayName, ignoreCase = true) }
         val upcomingToday = todaySchedule?.lessons?.firstOrNull { lesson ->
             if (lesson.type.equals("праздник", ignoreCase = true)) return@firstOrNull false
+            if (lesson.subject.isBlank()) return@firstOrNull false
             try {
                 val startTime = lesson.time.split("-").firstOrNull()?.trim().orEmpty()
                 if (startTime.isBlank()) return@firstOrNull false
@@ -107,7 +112,9 @@ class ScheduleRepository @Inject constructor(
                 false
             }
         }
-        if (upcomingToday != null) return upcomingToday
+        if (upcomingToday != null) {
+            return NextLessonInfo(upcomingToday, todayName, isToday = true)
+        }
 
         val days = listOf("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота")
         val currIndex = days.indexOfFirst { it.equals(todayName, ignoreCase = true) }
@@ -118,7 +125,9 @@ class ScheduleRepository @Inject constructor(
             val first = schedule.find { it.dayName.equals(nextDayName, ignoreCase = true) }
                 ?.lessons
                 ?.firstOrNull { !it.type.equals("праздник", true) && it.subject.isNotBlank() }
-            if (first != null) return first
+            if (first != null) {
+                return NextLessonInfo(first, nextDayName, isToday = false)
+            }
         }
         return null
     }

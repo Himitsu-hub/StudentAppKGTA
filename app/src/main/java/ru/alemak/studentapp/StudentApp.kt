@@ -13,7 +13,6 @@ import ru.alemak.studentapp.updates.ScheduleUpdateScheduler
 class StudentApp : Application() {
 
     override fun attachBaseContext(base: Context) {
-        // Night mode as early as possible (values-night splash resources)
         ThemePrefs.applyNightModeFromPrefs(base)
         super.attachBaseContext(base)
     }

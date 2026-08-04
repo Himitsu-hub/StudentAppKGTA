@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      windowDisablePreview=true:
-      System starting window is drawn BEFORE app code and always used light Splash
-      from the manifest → light-blue flash in dark mode. Disabling preview removes
-      that first empty frame; correct color comes from setTheme + BrandSplash.
+      One splash only: solid theme color + kgta_logo (emblem + name text).
+      Empty system icon → no giant launcher logo as a separate first screen.
+      windowDisablePreview → no blank system preview.
     -->
     <style name="Theme.StudentApp.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#1A336C</item>

@@ -8,6 +8,13 @@ data class Lesson(
     val type: String = "",
 )
 
+/** Next class for home / widget (with day label). */
+data class NextLessonInfo(
+    val lesson: Lesson,
+    val dayName: String,
+    val isToday: Boolean,
+)
+
 data class ScheduleDay(
     val dayName: String,
     val lessons: List<Lesson> = emptyList(),

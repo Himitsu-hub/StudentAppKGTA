@@ -1,5 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">КГТУ Студент</string>
-    <string name="widget_schedule_description">Числитель/знаменатель и следующая пара</string>
-    <string name="widget_schedule_title">Расписание КГТУ</string>
+    <string name="widget_schedule_title_wide">КГТУ · Расписание (4×2)</string>
+    <string name="widget_schedule_title_square">КГТУ · Расписание (2×2)</string>
+    <string name="widget_schedule_description_wide">Неделя и следующая пара — широкий виджет</string>
+    <string name="widget_schedule_description_square">Неделя и следующая пара — квадратный виджет</string>
+    <!-- legacy keys if referenced elsewhere -->
+    <string name="widget_schedule_title">КГТУ · Расписание</string>
+    <string name="widget_schedule_description">Неделя и следующая пара</string>
 </resources>

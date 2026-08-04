@@ -28,6 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.inject.Inject
 import kotlinx.coroutines.delay
 import ru.alemak.studentapp.ui.components.BrandSplash
 import ru.alemak.studentapp.ui.navigation.AppNavigation
@@ -35,29 +36,33 @@ import ru.alemak.studentapp.ui.navigation.ThemeViewModel
 import ru.alemak.studentapp.ui.theme.StudentAppTheme
 import ru.alemak.studentapp.ui.theme.ThemePrefs
 import ru.alemak.studentapp.updates.ScheduleUpdateScheduler
+import ru.alemak.studentapp.widget.ScheduleWidgetUpdater
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var widgetUpdater: ScheduleWidgetUpdater
 
     private val requestNotifications = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { /* optional */ }
 
-    private val keepSystemSplash = AtomicBoolean(true)
+    /** Hold system splash until Compose shows the same logo+name screen. */
+    private val keepSplash = AtomicBoolean(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Theme from prefs BEFORE window / splash API (no launcher aliases — those crashed)
         val dark = ThemePrefs.isDark(this)
         val bgColor = if (dark) 0xFF0A1020.toInt() else 0xFF1A336C.toInt()
 
+        // Theme with logo+name windowBackground BEFORE system splash is configured
         setTheme(
             if (dark) R.style.Theme_StudentApp_SplashDark
             else R.style.Theme_StudentApp_Splash,
         )
-        installSplashScreen().setKeepOnScreenCondition { keepSystemSplash.get() }
+        // Empty system icon → no separate "big emblem only" first screen
+        installSplashScreen().setKeepOnScreenCondition { keepSplash.get() }
         super.onCreate(savedInstanceState)
 
-        // Paint the real window the correct color immediately (preview is disabled in themes)
         window.setBackgroundDrawableResource(
             if (dark) R.drawable.splash_background_dark
             else R.drawable.splash_background,
@@ -68,7 +73,6 @@ class MainActivity : ComponentActivity() {
             window.statusBarColor = bgColor
             window.navigationBarColor = bgColor
         }
-        // Avoid a light flash under translucent system bars
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
@@ -81,6 +85,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         ensureNotificationPermission()
         ScheduleUpdateScheduler.schedule(this)
+        widgetUpdater.updateAsync()
 
         setContent {
             val themeViewModel: ThemeViewModel = hiltViewModel()
@@ -91,14 +96,13 @@ class MainActivity : ComponentActivity() {
             var showBrandSplash by remember { mutableStateOf(true) }
 
             LaunchedEffect(Unit) {
-                // As soon as first Compose frame is scheduled, drop system splash
-                // so user sees BrandSplash (correct color) not the old light preview.
-                keepSystemSplash.set(false)
+                // System splash already shows same logo+name; hand off to Compose
+                keepSplash.set(false)
             }
 
             LaunchedEffect(prefsReady) {
                 if (prefsReady) {
-                    delay(650)
+                    delay(550)
                     showBrandSplash = false
                 }
             }
@@ -116,7 +120,7 @@ class MainActivity : ComponentActivity() {
 
                     AnimatedVisibility(
                         visible = showBrandSplash,
-                        exit = fadeOut(tween(280)),
+                        exit = fadeOut(tween(250)),
                     ) {
                         BrandSplash(darkTheme = splashDark)
                     }

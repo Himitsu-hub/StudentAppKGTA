@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 
 /**
- * Persists in-app dark/light for next cold start.
- * No activity-alias switching — that disabled the launcher and crashed dark launches.
+ * Persists dark/light for next cold start.
+ * No activity-alias switching — LauncherLight/Dark caused "does not exist" crashes.
  */
 object ThemePrefs {
     private const val PREFS = "splash_theme"
@@ -25,7 +25,6 @@ object ThemePrefs {
             .commit()
     }
 
-    /** Application only — night resources; does not recreate Activity mid-session. */
     fun applyNightModeFromPrefs(context: Context) {
         val dark = isDark(context)
         val mode = if (dark) {
