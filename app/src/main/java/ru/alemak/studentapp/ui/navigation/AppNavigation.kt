@@ -1,15 +1,8 @@
 package ru.alemak.studentapp.ui.navigation
 
 import android.net.Uri
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -46,19 +39,8 @@ fun AppNavigation(
     val dark by themeViewModel.darkTheme.collectAsStateWithLifecycle()
     val navController = rememberNavController()
 
-    // While DataStore loads — keep themed loading screen (not empty / not light flash)
-    if (!prefsReady) {
-        val bg = if (dark) Color(0xFF0A1020) else Color(0xFF1A336C)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(bg),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator(color = Color.White)
-        }
-        return
-    }
+    // Brand splash is drawn in MainActivity while prefs load
+    if (!prefsReady) return
 
     val startDest = if (onboardingDone) Routes.HOME else Routes.ONBOARDING
 

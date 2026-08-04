@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 
 /**
- * Persists in-app theme for the next cold start (splash color).
- * No activity-alias switching — that broke Studio launch (LauncherLight missing).
+ * Persists in-app dark/light for next cold start.
+ * No activity-alias switching — that disabled the launcher and crashed dark launches.
  */
 object ThemePrefs {
     private const val PREFS = "splash_theme"
@@ -25,7 +25,7 @@ object ThemePrefs {
             .commit()
     }
 
-    /** Application start only — night mode for values-night splash resources. */
+    /** Application only — night resources; does not recreate Activity mid-session. */
     fun applyNightModeFromPrefs(context: Context) {
         val dark = isDark(context)
         val mode = if (dark) {

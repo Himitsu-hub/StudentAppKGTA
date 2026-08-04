@@ -242,7 +242,29 @@ fun CampusScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 28.dp),
         ) {
-            // ── Header card: address + main phone ──
+            // ── Campus / maps first ──
+            SectionTitle("Корпуса и карты", titleColor)
+            Text(
+                text = "Планы этажей с аудиториями и преподавателями — здесь. Схемы добавим, когда будут чертежи.",
+                color = hintColor,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            buildings.forEach { building ->
+                BuildingCard(building = building, onBlue = onBlue)
+                Spacer(Modifier.height(10.dp))
+            }
+
+            // ── Contacts below ──
+            Spacer(Modifier.height(22.dp))
+            SectionTitle("Контакты", titleColor)
+            Text(
+                text = "Адрес, телефон и службы вуза",
+                color = hintColor,
+                fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(12.dp))
             HeaderCard(
                 onBlue = onBlue,
                 onCall = { callMain() },
@@ -250,7 +272,7 @@ fun CampusScreen(onBack: () -> Unit) {
                 onSite = { open(SITE_CONTACTS) },
             )
 
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(18.dp))
             SectionTitle("Быстрые контакты", titleColor)
             Text(
                 text = "Базовый номер $MAIN_PHONE_DISPLAY — наберите и добавьте добавочный.",
@@ -305,20 +327,6 @@ fun CampusScreen(onBack: () -> Unit) {
                     onEmail = { email -> mail(email) },
                     onWeb = { uri -> open(uri) },
                 )
-                Spacer(Modifier.height(10.dp))
-            }
-
-            Spacer(Modifier.height(22.dp))
-            SectionTitle("Корпуса", titleColor)
-            Text(
-                text = "Планы этажей с аудиториями и преподавателями добавим сюда, когда будут схемы.",
-                color = hintColor,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-            )
-            Spacer(Modifier.height(12.dp))
-            buildings.forEach { building ->
-                BuildingCard(building = building, onBlue = onBlue)
                 Spacer(Modifier.height(10.dp))
             }
 

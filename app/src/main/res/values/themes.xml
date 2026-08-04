@@ -1,24 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      windowDisablePreview: hide system starting window (often stuck on light theme).
-      Real splash color is applied in MainActivity via setTheme + windowBackground.
-      Launcher aliases still set the correct theme for cold start from the home icon.
+      windowDisablePreview=true:
+      System starting window is drawn BEFORE app code and always used light Splash
+      from the manifest → light-blue flash in dark mode. Disabling preview removes
+      that first empty frame; correct color comes from setTheme + BrandSplash.
     -->
-    <style name="Theme.StudentApp.Splash" parent="Theme.AppCompat.Light.NoActionBar">
+    <style name="Theme.StudentApp.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#1A336C</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_empty_icon</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="postSplashScreenTheme">@style/Theme.StudentApp</item>
         <item name="android:windowBackground">@drawable/splash_background</item>
         <item name="android:statusBarColor">#1A336C</item>
         <item name="android:navigationBarColor">#1A336C</item>
         <item name="android:windowDisablePreview">true</item>
-        <item name="android:windowSplashScreenBackground">#1A336C</item>
     </style>
 
-    <style name="Theme.StudentApp.SplashDark" parent="Theme.AppCompat.NoActionBar">
+    <style name="Theme.StudentApp.SplashDark" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0A1020</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_empty_icon</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="postSplashScreenTheme">@style/Theme.StudentApp.Dark</item>
         <item name="android:windowBackground">@drawable/splash_background_dark</item>
         <item name="android:statusBarColor">#0A1020</item>
         <item name="android:navigationBarColor">#0A1020</item>
         <item name="android:windowDisablePreview">true</item>
-        <item name="android:windowSplashScreenBackground">#0A1020</item>
     </style>
 
     <style name="Theme.StudentApp" parent="Theme.AppCompat.Light.NoActionBar">

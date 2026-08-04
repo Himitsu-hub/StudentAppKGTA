@@ -8,17 +8,28 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.toDrawable
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.delay
+import ru.alemak.studentapp.ui.components.BrandSplash
 import ru.alemak.studentapp.ui.navigation.AppNavigation
 import ru.alemak.studentapp.ui.navigation.ThemeViewModel
 import ru.alemak.studentapp.ui.theme.StudentAppTheme
@@ -32,41 +43,83 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission(),
     ) { /* optional */ }
 
+    private val keepSystemSplash = AtomicBoolean(true)
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Theme from prefs BEFORE window / splash API (no launcher aliases — those crashed)
         val dark = ThemePrefs.isDark(this)
+        val bgColor = if (dark) 0xFF0A1020.toInt() else 0xFF1A336C.toInt()
+
         setTheme(
             if (dark) R.style.Theme_StudentApp_SplashDark
             else R.style.Theme_StudentApp_Splash,
         )
+        installSplashScreen().setKeepOnScreenCondition { keepSystemSplash.get() }
         super.onCreate(savedInstanceState)
 
-        val bg = if (dark) 0xFF0A1020.toInt() else 0xFF1A336C.toInt()
-        window.setBackgroundDrawable(bg.toDrawable())
+        // Paint the real window the correct color immediately (preview is disabled in themes)
+        window.setBackgroundDrawableResource(
+            if (dark) R.drawable.splash_background_dark
+            else R.drawable.splash_background,
+        )
+        window.decorView.setBackgroundColor(bgColor)
         @Suppress("DEPRECATION")
         run {
-            window.statusBarColor = bg
-            window.navigationBarColor = bg
+            window.statusBarColor = bgColor
+            window.navigationBarColor = bgColor
+        }
+        // Avoid a light flash under translucent system bars
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
         }
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.decorView.setBackgroundColor(bg)
-
-        setTheme(
-            if (dark) R.style.Theme_StudentApp_Dark
-            else R.style.Theme_StudentApp,
-        )
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
 
         enableEdgeToEdge()
         ensureNotificationPermission()
         ScheduleUpdateScheduler.schedule(this)
+
         setContent {
             val themeViewModel: ThemeViewModel = hiltViewModel()
             val darkCompose by themeViewModel.darkTheme.collectAsStateWithLifecycle()
+            val prefsReady by themeViewModel.prefsReady.collectAsStateWithLifecycle()
+
+            val splashDark = remember { dark }
+            var showBrandSplash by remember { mutableStateOf(true) }
+
+            LaunchedEffect(Unit) {
+                // As soon as first Compose frame is scheduled, drop system splash
+                // so user sees BrandSplash (correct color) not the old light preview.
+                keepSystemSplash.set(false)
+            }
+
+            LaunchedEffect(prefsReady) {
+                if (prefsReady) {
+                    delay(650)
+                    showBrandSplash = false
+                }
+            }
+
             StudentAppTheme(darkTheme = darkCompose) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = if (darkCompose) Color(0xFF0A1020) else Color(0xFF1A336C),
-                ) {
-                    AppNavigation(themeViewModel = themeViewModel)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (prefsReady) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = if (darkCompose) Color(0xFF0A1020) else Color(0xFF1A336C),
+                        ) {
+                            AppNavigation(themeViewModel = themeViewModel)
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = showBrandSplash,
+                        exit = fadeOut(tween(280)),
+                    ) {
+                        BrandSplash(darkTheme = splashDark)
+                    }
                 }
             }
         }
