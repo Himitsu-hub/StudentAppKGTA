@@ -31,6 +31,7 @@ data class ScheduleResponseDto(
         schedule = schedule.map { it.toDomain() },
         fromCache = fromCache == true,
         isOffline = isOffline,
+        updatedAtMillis = System.currentTimeMillis(),
     )
 }
 

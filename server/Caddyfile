@@ -1,0 +1,24 @@
+# Automatic HTTPS via Let's Encrypt (Caddy).
+# Set DOMAIN in .env, e.g. DOMAIN=api.studentkgta.ru
+#
+# Requirements:
+#   1) DNS A-record: DOMAIN → your VPS IP (157.22.186.149)
+#   2) Ports 80 and 443 open on the VPS firewall
+#   3) DOMAIN env var matches this site name
+
+{$DOMAIN:localhost} {
+	encode gzip
+	reverse_proxy schedule-api:8000
+
+	# Basic hardening headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	log {
+		output stdout
+	}
+}

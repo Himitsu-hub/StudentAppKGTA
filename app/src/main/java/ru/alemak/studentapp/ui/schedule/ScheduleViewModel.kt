@@ -14,6 +14,7 @@ import ru.alemak.studentapp.data.local.UserPreferences
 import ru.alemak.studentapp.data.model.ScheduleDay
 import ru.alemak.studentapp.data.repository.ScheduleRepository
 import ru.alemak.studentapp.util.DateUtils
+import ru.alemak.studentapp.util.TimeFormat
 
 data class ScheduleUiState(
     val course: Int = 1,
@@ -23,7 +24,9 @@ data class ScheduleUiState(
     val schedule: List<ScheduleDay> = emptyList(),
     val weekType: String = DateUtils.getCurrentWeekType(),
     val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false,
     val usingCachedData: Boolean = false,
+    val updatedLabel: String? = null,
     val error: String? = null,
     val prefsLoaded: Boolean = false,
 )
@@ -82,14 +85,20 @@ class ScheduleViewModel @Inject constructor(
     fun refresh() {
         val s = _uiState.value
         viewModelScope.launch {
-            loadForCourse(s.course, s.group, s.subgroup)
+            loadForCourse(s.course, s.group, s.subgroup, pullRefresh = true)
         }
     }
 
-    private suspend fun loadForCourse(course: Int, preferredGroup: String?, preferredSubgroup: String?) {
+    private suspend fun loadForCourse(
+        course: Int,
+        preferredGroup: String?,
+        preferredSubgroup: String?,
+        pullRefresh: Boolean = false,
+    ) {
         _uiState.update {
             it.copy(
-                isLoading = true,
+                isLoading = !pullRefresh && it.schedule.isEmpty(),
+                isRefreshing = pullRefresh || it.schedule.isNotEmpty(),
                 error = null,
                 usingCachedData = false,
                 weekType = DateUtils.getCurrentWeekType(),
@@ -103,6 +112,7 @@ class ScheduleViewModel @Inject constructor(
                         groups = emptyMap(),
                         schedule = emptyList(),
                         isLoading = false,
+                        isRefreshing = false,
                         error = "Группы для $course курса не найдены. Проверьте интернет.",
                     )
                 }
@@ -123,6 +133,7 @@ class ScheduleViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     error = e.message ?: "Ошибка загрузки групп",
                 )
             }
@@ -130,7 +141,7 @@ class ScheduleViewModel @Inject constructor(
     }
 
     private suspend fun loadSchedule(course: Int, group: String, subgroup: String?) {
-        _uiState.update { it.copy(isLoading = true, error = null) }
+        _uiState.update { it.copy(isLoading = it.schedule.isEmpty(), error = null) }
         try {
             val result = scheduleRepository.getSchedule(course, group, subgroup)
             _uiState.update {
@@ -138,7 +149,9 @@ class ScheduleViewModel @Inject constructor(
                     schedule = result.schedule,
                     weekType = result.weekType.ifBlank { DateUtils.getCurrentWeekType() },
                     isLoading = false,
+                    isRefreshing = false,
                     usingCachedData = result.isOffline,
+                    updatedLabel = TimeFormat.updatedAtLabel(result.updatedAtMillis),
                     error = if (result.schedule.isEmpty()) {
                         if (result.isOffline) {
                             "Нет сохранённого расписания. Подключитесь к интернету."
@@ -152,6 +165,7 @@ class ScheduleViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     error = e.message ?: "Ошибка загрузки расписания",
                 )
             }

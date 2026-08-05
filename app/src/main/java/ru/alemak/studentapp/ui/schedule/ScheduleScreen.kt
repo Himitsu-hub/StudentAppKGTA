@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,7 @@ import ru.alemak.studentapp.ui.components.EmptyState
 import ru.alemak.studentapp.ui.components.ErrorState
 import ru.alemak.studentapp.ui.components.LoadingState
 import ru.alemak.studentapp.ui.components.OfflineBanner
+import ru.alemak.studentapp.ui.components.UpdatedAtLabel
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 import ru.alemak.studentapp.util.DateUtils
 import ru.alemak.studentapp.util.HolidayUtils
@@ -70,68 +72,85 @@ fun ScheduleScreen(
         },
         containerColor = scheduleBg,
     ) { padding ->
-        Column(
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { viewModel.refresh() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .background(scheduleBg),
         ) {
-            OfflineBanner(visible = state.usingCachedData)
-
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    text = "Неделя: ${state.weekType}",
-                    color = accent,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(scheduleBg),
+            ) {
+                OfflineBanner(
+                    visible = state.usingCachedData,
+                    updatedLabel = state.updatedLabel,
                 )
-
-                Text(
-                    text = "Нажмите, чтобы сменить (курс / группа / подгруппа)",
-                    color = if (isLightBrand) Color(0xFF5F6B7A) else scheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-
-                SelectionChip(
-                    text = "Курс: ${state.course}",
-                    onClick = { showCourseDialog = true },
-                )
-                SelectionChip(
-                    text = "Группа: ${state.group ?: "выбрать"}",
-                    onClick = { if (state.groups.isNotEmpty()) showGroupDialog = true },
-                )
-                SelectionChip(
-                    text = "Подгруппа: ${state.subgroup ?: "выбрать"}",
-                    onClick = {
-                        if (!state.group.isNullOrBlank() &&
-                            state.groups[state.group].orEmpty().isNotEmpty()
-                        ) {
-                            showSubgroupDialog = true
-                        }
-                    },
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                when {
-                    state.isLoading || !state.prefsLoaded -> LoadingState("Загружаем расписание…")
-                    state.error != null && state.schedule.isEmpty() -> ErrorState(state.error!!) {
-                        viewModel.refresh()
-                    }
-                    state.schedule.isEmpty() -> EmptyState(
-                        "Нет занятий",
-                        "Для выбранной группы расписание отсутствует",
+                if (!state.usingCachedData) {
+                    UpdatedAtLabel(
+                        text = state.updatedLabel,
+                        color = if (isLightBrand) Color(0xFF5F6B7A) else scheme.onSurfaceVariant,
                     )
-                    else -> {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(state.schedule, key = { it.dayName }) { day ->
-                                DayScheduleCard(day)
+                }
+
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Неделя: ${state.weekType}",
+                        color = accent,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                    )
+
+                    Text(
+                        text = "Нажмите, чтобы сменить (курс / группа / подгруппа)",
+                        color = if (isLightBrand) Color(0xFF5F6B7A) else scheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+
+                    SelectionChip(
+                        text = "Курс: ${state.course}",
+                        onClick = { showCourseDialog = true },
+                    )
+                    SelectionChip(
+                        text = "Группа: ${state.group ?: "выбрать"}",
+                        onClick = { if (state.groups.isNotEmpty()) showGroupDialog = true },
+                    )
+                    SelectionChip(
+                        text = "Подгруппа: ${state.subgroup ?: "выбрать"}",
+                        onClick = {
+                            if (!state.group.isNullOrBlank() &&
+                                state.groups[state.group].orEmpty().isNotEmpty()
+                            ) {
+                                showSubgroupDialog = true
                             }
-                            item { Spacer(Modifier.height(16.dp)) }
+                        },
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    when {
+                        state.isLoading || !state.prefsLoaded -> LoadingState("Загружаем расписание…")
+                        state.error != null && state.schedule.isEmpty() -> ErrorState(state.error!!) {
+                            viewModel.refresh()
+                        }
+                        state.schedule.isEmpty() -> EmptyState(
+                            "Нет занятий",
+                            "Для выбранной группы расписание отсутствует",
+                        )
+                        else -> {
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(state.schedule, key = { it.dayName }) { day ->
+                                    DayScheduleCard(day)
+                                }
+                                item { Spacer(Modifier.height(16.dp)) }
+                            }
                         }
                     }
                 }

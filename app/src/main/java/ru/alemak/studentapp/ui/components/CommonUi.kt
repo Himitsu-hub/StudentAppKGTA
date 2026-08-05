@@ -37,8 +37,17 @@ import ru.alemak.studentapp.ui.theme.BlueKGTA
 import ru.alemak.studentapp.ui.theme.OfflineAmber
 
 @Composable
-fun OfflineBanner(visible: Boolean, modifier: Modifier = Modifier) {
+fun OfflineBanner(
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+    updatedLabel: String? = null,
+) {
     if (!visible) return
+    val text = if (updatedLabel.isNullOrBlank()) {
+        "Нет сети — показаны сохранённые данные"
+    } else {
+        "Нет сети · $updatedLabel"
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -55,12 +64,31 @@ fun OfflineBanner(visible: Boolean, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "Сервер недоступен — показаны сохранённые данные",
+            text = text,
             color = Color.White,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
         )
     }
+}
+
+/** Subtle line under banners: "Обновлено: 5 мин назад" */
+@Composable
+fun UpdatedAtLabel(
+    text: String?,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    if (text.isNullOrBlank()) return
+    Text(
+        text = text,
+        color = color,
+        style = MaterialTheme.typography.labelSmall,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

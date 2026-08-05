@@ -1,12 +1,19 @@
-version: "3.8"
+# Production stack:
+
+#   - schedule-api: FastAPI on internal Docker network only
+#   - caddy: public HTTPS (80/443) → reverse proxy to API
+#
+# Without DOMAIN (local/dev): API still reachable on host port 8000.
+# With DOMAIN set: use https://DOMAIN/  (Caddy gets Let's Encrypt certs).
 
 services:
   schedule-api:
     build: .
+    # Bind to localhost only when Caddy is in front (safer).
+    # Keep 8000 for healthchecks / emergency access from the server itself.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
-      # Host folder = live code. After scp, only restart container (no full rebuild needed).
       - ./:/app
     env_file:
       - .env
@@ -20,3 +27,30 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    networks:
+      - studentapp
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - schedule-api
+    networks:
+      - studentapp
+
+networks:
+  studentapp:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

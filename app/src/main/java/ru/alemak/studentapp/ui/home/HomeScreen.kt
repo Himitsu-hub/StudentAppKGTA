@@ -34,10 +34,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -67,6 +69,7 @@ import ru.alemak.studentapp.data.model.Lesson
 import ru.alemak.studentapp.data.model.NewsItem
 import androidx.compose.foundation.BorderStroke
 import ru.alemak.studentapp.ui.components.OfflineBanner
+import ru.alemak.studentapp.ui.components.UpdatedAtLabel
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 import ru.alemak.studentapp.ui.theme.DarkButton
 import ru.alemak.studentapp.ui.theme.DarkButtonBorder
@@ -88,6 +91,7 @@ private val NewsListFixedHeight =
         NewsCardFixedHeight * VisibleNewsCards +
         NewsCardSpacing * (VisibleNewsCards - 1)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onOpenSchedule: () -> Unit,
@@ -103,17 +107,25 @@ fun HomeScreen(
     val onHome = if (darkTheme) DarkOnSurface else Color.White
     val onHomeMuted = if (darkTheme) DarkOnSurfaceMuted else Color.White.copy(alpha = 0.85f)
 
-    // No auto-refresh on every return to Home — only network restore (in ViewModel)
-    // and the first open (init). Avoids half-second flicker.
-
-    Column(
+    PullToRefreshBox(
+        isRefreshing = state.isRefreshing,
+        onRefresh = { viewModel.refresh(showLoading = false) },
         modifier = Modifier
             .fillMaxSize()
             .background(homeBg)
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        OfflineBanner(visible = state.usingCachedData)
+    Column(
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        OfflineBanner(
+            visible = state.usingCachedData,
+            updatedLabel = state.updatedLabel,
+        )
+        if (!state.usingCachedData) {
+            UpdatedAtLabel(text = state.updatedLabel, color = onHomeMuted)
+        }
 
         Box(
             modifier = Modifier
@@ -227,6 +239,7 @@ fun HomeScreen(
             Spacer(Modifier.height(8.dp))
         }
     }
+    } // PullToRefreshBox
 }
 
 @Composable

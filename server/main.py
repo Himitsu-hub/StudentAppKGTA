@@ -1,15 +1,18 @@
 import os
+import io
 import json
 import secrets
 import shutil
 import tempfile
+import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from database import (
@@ -553,6 +556,110 @@ def admin_status(
     }
 
 
+def _backup_file_entries() -> list[dict]:
+    """List files that can be downloaded for backup."""
+    entries: list[dict] = []
+    for course in range(1, 5):
+        path = UPLOAD_DIR / f"schedule{course}.xlsx"
+        if path.is_file():
+            st = path.stat()
+            entries.append({
+                "id": f"schedule{course}",
+                "name": path.name,
+                "label": f"Excel · {course} курс",
+                "size": st.st_size,
+                "mtime": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+            })
+    db_path = Path("schedule.db")
+    if db_path.is_file():
+        st = db_path.stat()
+        entries.append({
+            "id": "schedule.db",
+            "name": "schedule.db",
+            "label": "База SQLite (разобранное расписание)",
+            "size": st.st_size,
+            "mtime": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+        })
+    if TEACHERS_FILE.is_file():
+        st = TEACHERS_FILE.stat()
+        entries.append({
+            "id": "teachers.json",
+            "name": "teachers.json",
+            "label": "Преподаватели (JSON)",
+            "size": st.st_size,
+            "mtime": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+        })
+    return entries
+
+
+def _resolve_backup_path(file_id: str) -> Path:
+    allowed = {
+        "schedule1": UPLOAD_DIR / "schedule1.xlsx",
+        "schedule2": UPLOAD_DIR / "schedule2.xlsx",
+        "schedule3": UPLOAD_DIR / "schedule3.xlsx",
+        "schedule4": UPLOAD_DIR / "schedule4.xlsx",
+        "schedule.db": Path("schedule.db"),
+        "teachers.json": TEACHERS_FILE,
+    }
+    path = allowed.get(file_id)
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    return path
+
+
+@app.get("/admin/backup/list")
+def admin_backup_list(
+    x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
+    password: Optional[str] = Query(None),
+):
+    """List Excel + DB files available for download."""
+    verify_admin_password(x_admin_password or password or "")
+    return {"files": _backup_file_entries()}
+
+
+@app.get("/admin/backup/download/{file_id}")
+def admin_backup_download(
+    file_id: str,
+    x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
+    password: Optional[str] = Query(None),
+):
+    """Download one backup file (Excel / DB / teachers)."""
+    verify_admin_password(x_admin_password or password or "")
+    path = _resolve_backup_path(file_id)
+    return FileResponse(
+        path=str(path),
+        filename=path.name,
+        media_type="application/octet-stream",
+    )
+
+
+@app.get("/admin/backup/zip")
+def admin_backup_zip(
+    x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
+    password: Optional[str] = Query(None),
+):
+    """ZIP of all Excel schedules + schedule.db + teachers.json (if present)."""
+    verify_admin_password(x_admin_password or password or "")
+    entries = _backup_file_entries()
+    if not entries:
+        raise HTTPException(status_code=404, detail="Нет файлов для бэкапа")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for e in entries:
+            path = _resolve_backup_path(e["id"])
+            zf.write(path, arcname=path.name)
+    buf.seek(0)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="studentapp-backup-{stamp}.zip"',
+        },
+    )
+
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_panel():
     """Admin UI for schedule staff — no SSH required."""
@@ -608,6 +715,16 @@ async def admin_panel():
       <button type="button" id="btnPublishAll">Опубликовать все проверенные</button>
     </div>
     <div id="globalLog" class="report" style="display:none;"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;color:var(--blue);font-size:1.15rem;">Бэкап</h2>
+    <p class="hint">Скачайте Excel и базу, чтобы не потерять расписание (на компьютер / флешку / облако).</p>
+    <div class="btns">
+      <button type="button" id="btnBackupZip">Скачать всё (ZIP)</button>
+      <button type="button" id="btnBackupList" class="secondary">Обновить список файлов</button>
+    </div>
+    <div id="backupList" class="report" style="display:none;margin-top:12px;"></div>
   </div>
 
   <div class="card">
@@ -785,6 +902,50 @@ async function loadHistory() {
   });
 }
 document.getElementById('refreshBtn').onclick = loadHistory;
+
+function fmtSize(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+  return (n/1024/1024).toFixed(1) + ' MB';
+}
+
+async function loadBackupList() {
+  if (!ensurePw()) return;
+  const box = document.getElementById('backupList');
+  box.style.display = 'block';
+  box.innerHTML = 'Загрузка…';
+  try {
+    const res = await fetch('/admin/backup/list', { headers: { 'X-Admin-Password': pw() } });
+    const data = await res.json();
+    if (!res.ok) {
+      box.innerHTML = '<span class="err">' + (data.detail || res.status) + '</span>';
+      return;
+    }
+    const files = data.files || [];
+    if (!files.length) {
+      box.innerHTML = '<span class="warn">Пока нет загруженных Excel / БД</span>';
+      return;
+    }
+    let h = '<b>Файлы на сервере</b><br>';
+    files.forEach(f => {
+      const when = f.mtime ? new Date(f.mtime).toLocaleString() : '';
+      const url = '/admin/backup/download/' + encodeURIComponent(f.id) + '?password=' + encodeURIComponent(pw());
+      h += `<div style="margin:8px 0;padding:8px;border:1px solid #e2e6ea;border-radius:8px">`;
+      h += `<b>${f.label || f.name}</b> · ${fmtSize(f.size || 0)} · ${when}<br>`;
+      h += `<a href="${url}">Скачать ${f.name}</a></div>`;
+    });
+    box.innerHTML = h;
+  } catch (e) {
+    box.innerHTML = '<span class="err">Сеть: ' + e + '</span>';
+  }
+}
+
+document.getElementById('btnBackupList').onclick = loadBackupList;
+document.getElementById('btnBackupZip').onclick = () => {
+  if (!ensurePw()) return;
+  window.location.href = '/admin/backup/zip?password=' + encodeURIComponent(pw());
+};
+
 renderCourses();
 </script>
 </body>

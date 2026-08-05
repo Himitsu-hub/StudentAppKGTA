@@ -11,6 +11,7 @@ data class NewsLoadResult(
     val news: List<NewsItem>,
     /** true only if we failed to reach API and fell back to local Room cache */
     val fromCache: Boolean,
+    val updatedAtMillis: Long = 0L,
 )
 
 @Singleton
@@ -25,16 +26,23 @@ class NewsRepository @Inject constructor(
         }.getOrNull()
 
         if (remote != null) {
+            val now = System.currentTimeMillis()
             newsDao.clear()
             newsDao.upsertAll(
                 remote.mapIndexed { index, item ->
-                    NewsCacheEntity.fromDomain(item, index)
+                    NewsCacheEntity.fromDomain(item, index).copy(updatedAt = now)
                 },
             )
-            return NewsLoadResult(remote, fromCache = false)
+            return NewsLoadResult(remote, fromCache = false, updatedAtMillis = now)
         }
 
-        val cached = newsDao.getAll().map { it.toDomain() }
-        return NewsLoadResult(cached, fromCache = cached.isNotEmpty())
+        val cachedEntities = newsDao.getAll()
+        val cached = cachedEntities.map { it.toDomain() }
+        val updatedAt = cachedEntities.maxOfOrNull { it.updatedAt } ?: 0L
+        return NewsLoadResult(
+            news = cached,
+            fromCache = cached.isNotEmpty(),
+            updatedAtMillis = updatedAt,
+        )
     }
 }

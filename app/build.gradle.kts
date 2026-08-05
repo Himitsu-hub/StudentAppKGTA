@@ -14,13 +14,13 @@ android {
         applicationId = "ru.alemak.studentapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 53
-        versionName = "2.3.28"
+        versionCode = 55
+        versionName = "2.3.30"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Production API. For emulator local server use http://10.0.2.2:8000/
-        buildConfigField("String", "BASE_URL", "\"http://157.22.186.149:8000/\"")
+        // Production API (HTTPS). Emulator local: http://10.0.2.2:8000/
+        buildConfigField("String", "BASE_URL", "\"https://apistudentkgtu.ru/\"")
     }
 
     buildTypes {

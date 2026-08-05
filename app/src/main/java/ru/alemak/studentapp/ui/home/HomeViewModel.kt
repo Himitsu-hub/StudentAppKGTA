@@ -23,6 +23,7 @@ import ru.alemak.studentapp.data.repository.NewsRepository
 import ru.alemak.studentapp.data.repository.ScheduleRepository
 import ru.alemak.studentapp.util.DateUtils
 import ru.alemak.studentapp.util.NetworkMonitor
+import ru.alemak.studentapp.util.TimeFormat
 import ru.alemak.studentapp.widget.ScheduleWidgetUpdater
 
 data class HomeUiState(
@@ -31,10 +32,13 @@ data class HomeUiState(
     val news: List<NewsItem> = emptyList(),
     val isLoadingLesson: Boolean = true,
     val isLoadingNews: Boolean = true,
+    val isRefreshing: Boolean = false,
     /** true only when data was taken from local cache because server was unreachable */
     val usingCachedData: Boolean = false,
     val hasGroup: Boolean = false,
     val error: String? = null,
+    /** "Обновлено: …" for UI */
+    val updatedLabel: String? = null,
 )
 
 @HiltViewModel
@@ -54,7 +58,6 @@ class HomeViewModel @Inject constructor(
 
     init {
         refresh(showLoading = true)
-        // When network comes back — silent reload (no loading flicker)
         viewModelScope.launch {
             networkMonitor.isOnline
                 .distinctUntilChanged()
@@ -69,10 +72,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * @param showLoading if true, shows spinners (first open / manual).
-     *                    if false, updates data in place without blanking the UI.
-     */
     fun refresh(showLoading: Boolean = true) {
         if (showLoading) {
             _uiState.update {
@@ -80,31 +79,42 @@ class HomeViewModel @Inject constructor(
                     weekType = DateUtils.getCurrentWeekType(),
                     isLoadingLesson = true,
                     isLoadingNews = true,
+                    isRefreshing = true,
                     error = null,
                 )
             }
         } else {
             _uiState.update {
-                it.copy(weekType = DateUtils.getCurrentWeekType(), error = null)
+                it.copy(
+                    weekType = DateUtils.getCurrentWeekType(),
+                    isRefreshing = true,
+                    error = null,
+                )
             }
         }
         viewModelScope.launch {
             coroutineScope {
                 val lessonJob = async { loadNextLesson() }
                 val newsJob = async { loadNews() }
-                val lessonFromCache = lessonJob.await()
-                val newsFromCache = newsJob.await()
+                val lessonMeta = lessonJob.await()
+                val newsMeta = newsJob.await()
+                val latest = listOfNotNull(lessonMeta.updatedAt, newsMeta.updatedAt)
+                    .filter { it > 0L }
+                    .maxOrNull() ?: 0L
                 _uiState.update {
                     it.copy(
-                        usingCachedData = lessonFromCache || newsFromCache,
+                        usingCachedData = lessonMeta.fromCache || newsMeta.fromCache,
+                        updatedLabel = TimeFormat.updatedAtLabel(latest),
+                        isRefreshing = false,
                     )
                 }
             }
         }
     }
 
-    /** @return true if schedule came from cache */
-    private suspend fun loadNextLesson(): Boolean {
+    private data class LoadMeta(val fromCache: Boolean, val updatedAt: Long)
+
+    private suspend fun loadNextLesson(): LoadMeta {
         return try {
             val selection = userPreferences.selection.first()
             if (selection.group.isNullOrBlank()) {
@@ -115,7 +125,7 @@ class HomeViewModel @Inject constructor(
                         isLoadingLesson = false,
                     )
                 }
-                return false
+                return LoadMeta(fromCache = false, updatedAt = 0L)
             }
             val result = scheduleRepository.getSchedule(
                 selection.course,
@@ -131,7 +141,7 @@ class HomeViewModel @Inject constructor(
                 )
             }
             widgetUpdater.updateAsync()
-            result.isOffline
+            LoadMeta(fromCache = result.isOffline, updatedAt = result.updatedAtMillis)
         } catch (e: Exception) {
             _uiState.update {
                 it.copy(
@@ -139,12 +149,11 @@ class HomeViewModel @Inject constructor(
                     error = e.message ?: "Ошибка загрузки расписания",
                 )
             }
-            true
+            LoadMeta(fromCache = true, updatedAt = 0L)
         }
     }
 
-    /** @return true if news came from cache */
-    private suspend fun loadNews(): Boolean {
+    private suspend fun loadNews(): LoadMeta {
         return try {
             val result = newsRepository.getNews(10)
             _uiState.update {
@@ -153,7 +162,7 @@ class HomeViewModel @Inject constructor(
                     isLoadingNews = false,
                 )
             }
-            result.fromCache
+            LoadMeta(fromCache = result.fromCache, updatedAt = result.updatedAtMillis)
         } catch (e: Exception) {
             _uiState.update {
                 it.copy(
@@ -161,7 +170,7 @@ class HomeViewModel @Inject constructor(
                     error = e.message,
                 )
             }
-            true
+            LoadMeta(fromCache = true, updatedAt = 0L)
         }
     }
 }

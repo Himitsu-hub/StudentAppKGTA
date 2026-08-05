@@ -42,6 +42,7 @@ class ScheduleRepository @Inject constructor(
         }.getOrNull()
 
         if (remote != null) {
+            val now = System.currentTimeMillis()
             scheduleDao.upsertSchedule(
                 ScheduleCacheEntity(
                     cacheKey = key,
@@ -50,9 +51,10 @@ class ScheduleRepository @Inject constructor(
                     subgroup = subgroup.orEmpty(),
                     weekType = remote.weekType.ifBlank { weekType },
                     schedule = remote.schedule,
+                    updatedAt = now,
                 ),
             )
-            return remote.copy(isOffline = false, fromCache = false)
+            return remote.copy(isOffline = false, fromCache = false, updatedAtMillis = now)
         }
 
         val cached = scheduleDao.getSchedule(key)
@@ -65,6 +67,7 @@ class ScheduleRepository @Inject constructor(
                 schedule = cached.schedule,
                 fromCache = true,
                 isOffline = true,
+                updatedAtMillis = cached.updatedAt,
             )
         }
 
@@ -76,6 +79,7 @@ class ScheduleRepository @Inject constructor(
             schedule = emptyList(),
             fromCache = false,
             isOffline = true,
+            updatedAtMillis = 0L,
         )
     }
 

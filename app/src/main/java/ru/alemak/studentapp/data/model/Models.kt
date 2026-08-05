@@ -28,6 +28,8 @@ data class ScheduleResult(
     val schedule: List<ScheduleDay>,
     val fromCache: Boolean = false,
     val isOffline: Boolean = false,
+    /** When this data was last saved/fetched (epoch millis). */
+    val updatedAtMillis: Long = System.currentTimeMillis(),
 )
 
 data class Teacher(
