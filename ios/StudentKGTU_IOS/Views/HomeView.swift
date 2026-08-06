@@ -8,6 +8,7 @@ struct HomeView: View {
 
     @State private var weekType = DateUtils.currentWeekType()
     @State private var nextLesson: Lesson?
+    @State private var isVacation = HolidayUtils.isSummerVacation()
     @State private var news: [NewsItem] = []
     @State private var isLoadingLesson = true
     @State private var isLoadingNews = true
@@ -65,6 +66,8 @@ struct HomeView: View {
 
                         if isLoadingLesson {
                             ProgressView().tint(onHome)
+                        } else if isVacation {
+                            nextLessonBlock
                         } else if !prefs.hasGroup {
                             Text("Выберите группу в разделе «Расписание»")
                                 .font(.system(size: 13))
@@ -112,7 +115,16 @@ struct HomeView: View {
 
     private var nextLessonBlock: some View {
         VStack(spacing: 4) {
-            if let lesson = nextLesson {
+            if isVacation {
+                Text(HolidayUtils.academicBreakTitle() ?? "Каникулы")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(onHome)
+                    .multilineTextAlignment(.center)
+                Text(HolidayUtils.academicBreakSubtitle() ?? "Занятия с 1 сентября")
+                    .font(.system(size: 15))
+                    .foregroundStyle(onHomeMuted)
+                    .multilineTextAlignment(.center)
+            } else if let lesson = nextLesson {
                 Text("Следующая пара")
                     .font(.system(size: 15))
                     .foregroundStyle(onHomeMuted)
@@ -288,7 +300,8 @@ struct HomeView: View {
     }
 
     private func refresh(showLoading: Bool) async {
-        weekType = DateUtils.currentWeekType()
+        isVacation = HolidayUtils.isSummerVacation()
+        weekType = isVacation ? "Каникулы" : DateUtils.currentWeekType()
         if showLoading {
             isLoadingLesson = true
             isLoadingNews = true
@@ -308,6 +321,13 @@ struct HomeView: View {
     }
 
     private func loadLesson() async -> LoadMeta {
+        if HolidayUtils.isSummerVacation() {
+            isVacation = true
+            weekType = "Каникулы"
+            nextLesson = nil
+            return LoadMeta(fromCache: false, updatedAt: 0)
+        }
+        isVacation = false
         guard let group = prefs.group, !group.isEmpty else {
             nextLesson = nil
             return LoadMeta(fromCache: false, updatedAt: 0)

@@ -8,12 +8,34 @@ enum WidgetUpdater {
 
     static func updateNow() async {
         let prefs = await MainActor.run { UserPreferences.shared }
-        let weekType = DateUtils.currentWeekType()
-        let weekLine = "Неделя: \(weekType)"
+        let vacation = HolidayUtils.isSummerVacation()
+        let weekType = vacation ? "Каникулы" : DateUtils.currentWeekType()
+        let weekLine = vacation ? "Каникулы" : "Неделя: \(weekType)"
 
         let course = await MainActor.run { prefs.course }
         let group = await MainActor.run { prefs.group }
         let subgroup = await MainActor.run { prefs.subgroup }
+
+        if vacation {
+            var groupLabel = ""
+            if let group, !group.isEmpty {
+                groupLabel = group
+                if let subgroup, !subgroup.isEmpty {
+                    groupLabel += " · \(subgroup)"
+                }
+            }
+            let snap = WidgetSnapshot(
+                weekLine: weekLine,
+                groupLine: groupLabel,
+                label: "Лето",
+                subject: "Каникулы",
+                details: "Занятия с 1 сентября",
+                hint: "Нажмите, чтобы открыть приложение"
+            )
+            WidgetSnapshot.save(snap)
+            WidgetCenter.shared.reloadAllTimelines()
+            return
+        }
 
         let snap: WidgetSnapshot
         if group == nil || group?.isEmpty == true {

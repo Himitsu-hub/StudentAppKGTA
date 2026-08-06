@@ -22,6 +22,7 @@ import ru.alemak.studentapp.data.model.NewsItem
 import ru.alemak.studentapp.data.repository.NewsRepository
 import ru.alemak.studentapp.data.repository.ScheduleRepository
 import ru.alemak.studentapp.util.DateUtils
+import ru.alemak.studentapp.util.HolidayUtils
 import ru.alemak.studentapp.util.NetworkMonitor
 import ru.alemak.studentapp.util.TimeFormat
 import ru.alemak.studentapp.widget.ScheduleWidgetUpdater
@@ -29,6 +30,10 @@ import ru.alemak.studentapp.widget.ScheduleWidgetUpdater
 data class HomeUiState(
     val weekType: String = DateUtils.getCurrentWeekType(),
     val nextLesson: Lesson? = null,
+    /** Summer break (Jul–Aug): show «Каникулы» instead of next pair */
+    val isVacation: Boolean = HolidayUtils.isSummerVacation(),
+    val vacationTitle: String? = HolidayUtils.academicBreakTitle(),
+    val vacationSubtitle: String? = HolidayUtils.academicBreakSubtitle(),
     val news: List<NewsItem> = emptyList(),
     val isLoadingLesson: Boolean = true,
     val isLoadingNews: Boolean = true,
@@ -73,10 +78,19 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refresh(showLoading: Boolean = true) {
+        val vacation = HolidayUtils.isSummerVacation()
+        val weekLabel = if (vacation) {
+            "Каникулы"
+        } else {
+            DateUtils.getCurrentWeekType()
+        }
         if (showLoading) {
             _uiState.update {
                 it.copy(
-                    weekType = DateUtils.getCurrentWeekType(),
+                    weekType = weekLabel,
+                    isVacation = vacation,
+                    vacationTitle = HolidayUtils.academicBreakTitle(),
+                    vacationSubtitle = HolidayUtils.academicBreakSubtitle(),
                     isLoadingLesson = true,
                     isLoadingNews = true,
                     isRefreshing = true,
@@ -86,7 +100,10 @@ class HomeViewModel @Inject constructor(
         } else {
             _uiState.update {
                 it.copy(
-                    weekType = DateUtils.getCurrentWeekType(),
+                    weekType = weekLabel,
+                    isVacation = vacation,
+                    vacationTitle = HolidayUtils.academicBreakTitle(),
+                    vacationSubtitle = HolidayUtils.academicBreakSubtitle(),
                     isRefreshing = true,
                     error = null,
                 )
@@ -116,11 +133,29 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadNextLesson(): LoadMeta {
         return try {
+            // July–August: no pairs until 1 September
+            if (HolidayUtils.isSummerVacation()) {
+                _uiState.update {
+                    it.copy(
+                        nextLesson = null,
+                        isVacation = true,
+                        vacationTitle = HolidayUtils.academicBreakTitle(),
+                        vacationSubtitle = HolidayUtils.academicBreakSubtitle(),
+                        weekType = "Каникулы",
+                        hasGroup = true,
+                        isLoadingLesson = false,
+                    )
+                }
+                widgetUpdater.updateAsync()
+                return LoadMeta(fromCache = false, updatedAt = 0L)
+            }
+
             val selection = userPreferences.selection.first()
             if (selection.group.isNullOrBlank()) {
                 _uiState.update {
                     it.copy(
                         nextLesson = null,
+                        isVacation = false,
                         hasGroup = false,
                         isLoadingLesson = false,
                     )
@@ -136,6 +171,9 @@ class HomeViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     nextLesson = lesson,
+                    isVacation = false,
+                    vacationTitle = null,
+                    vacationSubtitle = null,
                     hasGroup = true,
                     isLoadingLesson = false,
                 )

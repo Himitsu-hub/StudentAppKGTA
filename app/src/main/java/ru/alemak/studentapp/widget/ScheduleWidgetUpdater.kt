@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import ru.alemak.studentapp.data.local.UserPreferences
 import ru.alemak.studentapp.data.repository.ScheduleRepository
 import ru.alemak.studentapp.util.DateUtils
+import ru.alemak.studentapp.util.HolidayUtils
 import ru.alemak.studentapp.widget.ScheduleWidgetStore.Snapshot
 
 @Singleton
@@ -31,8 +32,34 @@ class ScheduleWidgetUpdater @Inject constructor(
 
     suspend fun updateNow() {
         val selection = userPreferences.selection.first()
-        val weekType = DateUtils.getCurrentWeekType()
-        val weekLine = "Неделя: $weekType"
+        val vacation = HolidayUtils.isSummerVacation()
+        val weekType = if (vacation) "Каникулы" else DateUtils.getCurrentWeekType()
+        val weekLine = if (vacation) "Каникулы" else "Неделя: $weekType"
+
+        if (vacation) {
+            val groupLabel = buildString {
+                if (!selection.group.isNullOrBlank()) {
+                    append(selection.group)
+                    if (!selection.subgroup.isNullOrBlank()) {
+                        append(" · ")
+                        append(selection.subgroup)
+                    }
+                }
+            }
+            ScheduleWidgetStore.save(
+                context,
+                Snapshot(
+                    weekLine = weekLine,
+                    groupLine = groupLabel,
+                    label = "Лето",
+                    subject = "Каникулы",
+                    details = "Занятия с 1 сентября",
+                    hint = "Нажмите, чтобы открыть приложение",
+                ),
+            )
+            notifyProviders()
+            return
+        }
 
         val snap = if (selection.group.isNullOrBlank()) {
             Snapshot(

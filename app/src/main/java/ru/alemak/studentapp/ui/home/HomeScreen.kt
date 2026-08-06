@@ -171,6 +171,14 @@ fun HomeScreen(
                 state.isLoadingLesson -> {
                     CircularProgressIndicator(color = onHome, modifier = Modifier.size(20.dp))
                 }
+                state.isVacation -> {
+                    NextLessonBlock(
+                        lesson = null,
+                        darkTheme = darkTheme,
+                        vacationTitle = state.vacationTitle ?: "Каникулы",
+                        vacationSubtitle = state.vacationSubtitle ?: "Занятия с 1 сентября",
+                    )
+                }
                 !state.hasGroup -> {
                     Text(
                         text = "Выберите группу в разделе «Расписание»",
@@ -243,11 +251,33 @@ fun HomeScreen(
 }
 
 @Composable
-private fun NextLessonBlock(lesson: Lesson?, darkTheme: Boolean) {
+private fun NextLessonBlock(
+    lesson: Lesson?,
+    darkTheme: Boolean,
+    vacationTitle: String? = null,
+    vacationSubtitle: String? = null,
+) {
     val primary = if (darkTheme) DarkOnSurface else Color.White
     val muted = if (darkTheme) DarkOnSurfaceMuted else Color.White.copy(alpha = 0.75f)
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        if (lesson != null) {
+        if (vacationTitle != null) {
+            Text(
+                text = vacationTitle,
+                color = primary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Center,
+            )
+            if (!vacationSubtitle.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = vacationSubtitle,
+                    color = muted,
+                    fontSize = 15.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else if (lesson != null) {
             Text(
                 text = "Следующая пара",
                 color = muted,

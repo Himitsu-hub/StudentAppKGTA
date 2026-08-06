@@ -1,7 +1,7 @@
 import Foundation
 
 enum HolidayUtils {
-    /// Same basic Russian public holidays as Android HolidayUtils.
+    /// Official public holidays (schedule day cards).
     private static let holidayNames: [String: String] = [
         "01.01": "Новый год",
         "02.01": "Новогодние каникулы",
@@ -32,5 +32,19 @@ enum HolidayUtils {
 
     static func holidayName(_ date: Date = Date()) -> String? {
         holidayNames[formatter.string(from: date)]
+    }
+
+    /// Summer academic break: July 1 … August 31 (studies from 1 September).
+    static func isSummerVacation(_ date: Date = Date()) -> Bool {
+        let m = Calendar.current.component(.month, from: date)
+        return m == 7 || m == 8
+    }
+
+    static func academicBreakTitle(_ date: Date = Date()) -> String? {
+        isSummerVacation(date) ? "Каникулы" : nil
+    }
+
+    static func academicBreakSubtitle(_ date: Date = Date()) -> String? {
+        isSummerVacation(date) ? "Лето · занятия с 1 сентября" : nil
     }
 }
