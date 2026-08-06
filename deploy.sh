@@ -4,8 +4,11 @@ set -euo pipefail
 # Usage (HTTP only):
 #   ADMIN_PASSWORD='strong' ./deploy.sh
 #
-# Usage (HTTPS with Caddy + Let's Encrypt):
+# Usage (HTTPS with Caddy + Let’s Encrypt):
 #   ADMIN_PASSWORD='strong' DOMAIN='apistudentkgtu.ru' ./deploy.sh
+#
+# Code-only (no docker rebuild — use when PyPI is slow / site is down):
+#   SKIP_BUILD=1 ADMIN_PASSWORD='strong' DOMAIN='apistudentkgtu.ru' ./deploy.sh
 #
 # Optional:
 #   SERVER=root@157.22.186.149 REMOTE_DIR=/opt/studentapp ./deploy.sh
@@ -14,10 +17,12 @@ S="${SERVER:-root@157.22.186.149}"
 REMOTE_DIR="${REMOTE_DIR:-/opt/studentapp}"
 D="$(cd "$(dirname "$0")/server" && pwd)"
 DOMAIN="${DOMAIN:-}"
+SKIP_BUILD="${SKIP_BUILD:-0}"
 
 if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
   echo "ERROR: set ADMIN_PASSWORD env var before deploy."
   echo "Example: ADMIN_PASSWORD='...' DOMAIN='apistudentkgtu.ru' ./deploy.sh"
+  echo "If site is down and rebuild fails: SKIP_BUILD=1 ADMIN_PASSWORD='...' DOMAIN='apistudentkgtu.ru' ./deploy.sh"
   exit 1
 fi
 
@@ -27,7 +32,6 @@ scp "$D/main.py" "$D/database.py" "$D/parser.py" "$D/scraper.py" "$D/news_scrape
     "$D/schedule_validator.py" \
     "$D/requirements.txt" "$D/Dockerfile" "$D/docker-compose.yml" "$D/Caddyfile" \
     "$S:$REMOTE_DIR/"
-# Favicon / static assets for admin tab icon
 if [[ -d "$D/static" ]]; then
   scp -r "$D/static/." "$S:$REMOTE_DIR/static/"
 fi
@@ -59,12 +63,10 @@ else
 fi
 
 echo "4/6 Restarting Docker (API + Caddy)..."
-# Old docker-compose 1.29 breaks on new Docker with KeyError: ContainerConfig.
-# Prefer Docker Compose V2 plugin; remove old containers first.
-# Free host ports 80/443 if nginx/apache hold them (needed for Caddy HTTPS).
 ssh "$S" bash -s <<REMOTE
 set -euo pipefail
 cd "$REMOTE_DIR"
+SKIP_BUILD="$SKIP_BUILD"
 
 if docker compose version >/dev/null 2>&1; then
   DC="docker compose"
@@ -74,28 +76,37 @@ else
   echo "ERROR: neither 'docker compose' nor 'docker-compose' found"
   exit 1
 fi
-echo "Using: \$DC"
+echo "Using: \$DC  SKIP_BUILD=\$SKIP_BUILD"
 
-# Stop common web servers that grab :80 / :443
 systemctl stop nginx 2>/dev/null || true
 systemctl disable nginx 2>/dev/null || true
 systemctl stop apache2 2>/dev/null || true
 systemctl disable apache2 2>/dev/null || true
 systemctl stop httpd 2>/dev/null || true
-# Anything else on 80/443
 if command -v fuser >/dev/null 2>&1; then
   fuser -k 80/tcp 2>/dev/null || true
   fuser -k 443/tcp 2>/dev/null || true
 fi
 
-\$DC down --remove-orphans || true
-docker rm -f studentapp-schedule-api-1 studentapp_schedule-api_1 studentapp-caddy-1 2>/dev/null || true
-docker rm -f \$(docker ps -aq --filter name=studentapp) 2>/dev/null || true
+# Prefer soft restart: code is volume-mounted (./:/app), no rebuild needed for main.py/static.
+if [[ "\$SKIP_BUILD" == "1" ]]; then
+  echo "SKIP_BUILD=1 → start existing images (no pip / no rebuild)"
+  \$DC up -d --remove-orphans
+  # If API was never built, fall back to build
+  if ! \$DC ps --status running 2>/dev/null | grep -q schedule-api; then
+    echo "API not running — trying rebuild (may fail if PyPI blocked)..."
+    \$DC up -d --build --force-recreate || true
+  fi
+else
+  # Try rebuild; on failure still try to start previous image so site comes back
+  if ! \$DC up -d --build --force-recreate; then
+    echo "WARN: docker build failed (often PyPI timeout). Starting last known images..."
+    \$DC up -d --remove-orphans || true
+  fi
+fi
 
-\$DC up -d --build --force-recreate
 \$DC ps
 
-# Harden firewall: SSH + 80/443 open, 8000 closed from internet
 if command -v ufw >/dev/null 2>&1; then
   echo "Hardening UFW (deny public :8000)..."
   ufw allow OpenSSH 2>/dev/null || ufw allow 22/tcp 2>/dev/null || true
@@ -104,34 +115,35 @@ if command -v ufw >/dev/null 2>&1; then
   ufw deny 8000/tcp 2>/dev/null || true
   ufw --force enable 2>/dev/null || true
   ufw status numbered 2>/dev/null || true
-else
-  echo "ufw not found — skip firewall (API still bound to 127.0.0.1:8000 in Docker)"
 fi
 REMOTE
 
 echo "5/6 Health check (local API)..."
-ssh "$S" "sleep 2; curl -sf http://127.0.0.1:8000/health && echo && curl -sf http://127.0.0.1:8000/api/courses | head -c 200 && echo"
+if ssh "$S" "sleep 3; curl -sf http://127.0.0.1:8000/health"; then
+  echo ""
+  ssh "$S" "curl -sf http://127.0.0.1:8000/api/courses | head -c 200 && echo" || true
+else
+  echo ""
+  echo "WARN: local API health failed. On server run:"
+  echo "  ssh $S 'cd $REMOTE_DIR && docker compose ps && docker compose logs schedule-api --tail 50'"
+fi
 
 if [[ -n "$DOMAIN" && "$DOMAIN" != "localhost" ]]; then
   echo "6/6 Health check (HTTPS)..."
-  sleep 5
-  if ssh "$S" "curl -sf https://$DOMAIN/health"; then
+  sleep 3
+  if curl -sf "https://$DOMAIN/health" >/dev/null 2>&1 || ssh "$S" "curl -sf https://$DOMAIN/health"; then
     echo ""
-    echo "DONE. HTTPS OK + port 8000 denied from outside (if ufw present)."
+    echo "DONE. Site should be up."
     echo "  API:   https://$DOMAIN/"
-    echo "  Admin: https://$DOMAIN/admin  (backup ZIP available there)"
-    echo "  Android BASE_URL: \"https://$DOMAIN/\""
+    echo "  Admin: https://$DOMAIN/admin"
+    echo "  Favicon: https://$DOMAIN/static/favicon.png"
   else
     echo ""
-    echo "WARN: https://$DOMAIN/health failed."
-    echo "  - dig @8.8.8.8 +short $DOMAIN  → must be server IP"
-    echo "  - ufw allow 80/tcp && ufw allow 443/tcp"
-    echo "  - ssh $S 'cd $REMOTE_DIR && docker compose logs caddy --tail 80'"
-    echo "  Local API: http://127.0.0.1:8000 on the server"
+    echo "WARN: https://$DOMAIN/health failed — check DNS / Caddy logs."
+    echo "  ssh $S 'cd $REMOTE_DIR && docker compose logs caddy --tail 40'"
     exit 1
   fi
 else
   echo "6/6 Skip public HTTPS (no DOMAIN)."
   echo "DONE (HTTP mode)."
 fi
-
