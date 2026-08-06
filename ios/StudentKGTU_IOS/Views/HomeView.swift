@@ -8,7 +8,6 @@ struct HomeView: View {
 
     @State private var weekType = DateUtils.currentWeekType()
     @State private var nextLesson: Lesson?
-    @State private var isVacation = HolidayUtils.isSummerVacation()
     @State private var news: [NewsItem] = []
     @State private var isLoadingLesson = true
     @State private var isLoadingNews = true
@@ -19,9 +18,16 @@ struct HomeView: View {
     /// Like Android ViewModel: load once; do not reload when popping back from other screens.
     @State private var didInitialLoad = false
 
+    /// Always from device date (not cached state) — July–August = vacation.
+    private var onVacation: Bool { HolidayUtils.isSummerVacation() }
+
     private var homeBg: Color { theme.isDark ? AppColors.darkNavy : AppColors.blueKGTA }
     private var onHome: Color { theme.isDark ? AppColors.darkOnSurface : .white }
     private var onHomeMuted: Color { theme.isDark ? AppColors.darkOnSurfaceMuted : Color.white.opacity(0.85) }
+
+    private var headerWeekLine: String {
+        onVacation ? "Каникулы" : weekType
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -60,14 +66,15 @@ struct HomeView: View {
                             .frame(width: 168, height: 168)
                             .padding(.top, -2)
 
-                        Text(weekType)
+                        Text(headerWeekLine)
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(onHome)
 
-                        if isLoadingLesson {
+                        if onVacation {
+                            // Summer: never show next lesson (even if old cache had pairs)
+                            vacationBlock
+                        } else if isLoadingLesson {
                             ProgressView().tint(onHome)
-                        } else if isVacation {
-                            nextLessonBlock
                         } else if !prefs.hasGroup {
                             Text("Выберите группу в разделе «Расписание»")
                                 .font(.system(size: 13))
@@ -113,18 +120,23 @@ struct HomeView: View {
         }
     }
 
+    private var vacationBlock: some View {
+        VStack(spacing: 4) {
+            Text("Каникулы")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(onHome)
+                .multilineTextAlignment(.center)
+            Text("Лето · занятия с 1 сентября")
+                .font(.system(size: 15))
+                .foregroundStyle(onHomeMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var nextLessonBlock: some View {
         VStack(spacing: 4) {
-            if isVacation {
-                Text(HolidayUtils.academicBreakTitle() ?? "Каникулы")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(onHome)
-                    .multilineTextAlignment(.center)
-                Text(HolidayUtils.academicBreakSubtitle() ?? "Занятия с 1 сентября")
-                    .font(.system(size: 15))
-                    .foregroundStyle(onHomeMuted)
-                    .multilineTextAlignment(.center)
-            } else if let lesson = nextLesson {
+            if let lesson = nextLesson {
                 Text("Следующая пара")
                     .font(.system(size: 15))
                     .foregroundStyle(onHomeMuted)
@@ -300,8 +312,23 @@ struct HomeView: View {
     }
 
     private func refresh(showLoading: Bool) async {
-        isVacation = HolidayUtils.isSummerVacation()
-        weekType = isVacation ? "Каникулы" : DateUtils.currentWeekType()
+        // Vacation UI uses onVacation (live date); skip schedule fetch in summer.
+        if HolidayUtils.isSummerVacation() {
+            weekType = "Каникулы"
+            nextLesson = nil
+            isLoadingLesson = false
+            if showLoading { isLoadingNews = true }
+            isRefreshing = true
+            defer { isRefreshing = false }
+            let newsMeta = await loadNews()
+            usingCached = newsMeta.fromCache
+            updatedLabel = TimeFormat.updatedAtLabel(millis: newsMeta.updatedAt)
+            isLoadingNews = false
+            await WidgetUpdater.updateNow()
+            return
+        }
+
+        weekType = DateUtils.currentWeekType()
         if showLoading {
             isLoadingLesson = true
             isLoadingNews = true
@@ -322,12 +349,10 @@ struct HomeView: View {
 
     private func loadLesson() async -> LoadMeta {
         if HolidayUtils.isSummerVacation() {
-            isVacation = true
             weekType = "Каникулы"
             nextLesson = nil
             return LoadMeta(fromCache: false, updatedAt: 0)
         }
-        isVacation = false
         guard let group = prefs.group, !group.isEmpty else {
             nextLesson = nil
             return LoadMeta(fromCache: false, updatedAt: 0)

@@ -34,9 +34,12 @@ enum HolidayUtils {
         holidayNames[formatter.string(from: date)]
     }
 
-    /// Summer academic break: July 1 … August 31 (studies from 1 September).
+    /// Summer academic break: 1 July … 31 August inclusive (studies from 1 September).
     static func isSummerVacation(_ date: Date = Date()) -> Bool {
-        let m = Calendar.current.component(.month, from: date)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .current
+        let m = cal.component(.month, from: date)
+        // July = 7, August = 8
         return m == 7 || m == 8
     }
 
