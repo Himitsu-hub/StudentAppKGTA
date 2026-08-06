@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from database import (
@@ -40,6 +41,8 @@ if not ADMIN_PASSWORD:
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+STATIC_DIR = Path("static")
+STATIC_DIR.mkdir(exist_ok=True)
 TEACHERS_FILE = Path("teachers.json")
 WEEK_TYPES = ("Числитель", "Знаменатель")
 
@@ -48,6 +51,21 @@ app = FastAPI(
     version="2.0.0",
     description="API расписания, новостей и преподавателей КГТА",
 )
+
+if STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Browser tab icon for admin and root."""
+    png = STATIC_DIR / "favicon.png"
+    ico = STATIC_DIR / "favicon.ico"
+    if ico.exists():
+        return FileResponse(ico, media_type="image/x-icon")
+    if png.exists():
+        return FileResponse(png, media_type="image/png")
+    raise HTTPException(status_code=404, detail="favicon missing")
 
 app.add_middleware(
     CORSMiddleware,
@@ -670,6 +688,8 @@ async def admin_panel():
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Загрузка расписания — StudentApp</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+<link rel="shortcut icon" type="image/png" href="/favicon.ico">
 <style>
   :root { --blue:#1a336c; --bg:#eef2f7; --ok:#1b7a3d; --err:#b42318; --warn:#b54708; }
   * { box-sizing: border-box; }

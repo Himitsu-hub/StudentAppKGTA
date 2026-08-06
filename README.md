@@ -2,23 +2,22 @@
 
 Мобильное приложение для студентов КГТА (КГТУ / dksta.ru): расписание, преподаватели, новости, виджеты, офлайн.
 
+**Платформы:** Android (`app/`) · iOS (`ios/`) · Backend (`server/`).
+
 ## Milestone: ядро готово (остались карты этажей)
 
-**Статус на момент этого коммита:** продукт по расписанию и серверу **закончен**.  
-**Следующий крупный блок (не сделан):** карта этажей / навигация по корпусу — когда появятся планы этажей.
+**Статус:** продукт по расписанию и серверу **закончен** на Android **и** iOS.  
+**Следующий крупный блок:** карта этажей / навигация по корпусу — когда появятся планы этажей.
 
 | Готово | Не сделано |
 |--------|------------|
-| Android: расписание, группы, тема, splash, логотип | Карта этажей |
-| Офлайн-кэш + «обновлено в …» + pull-to-refresh | Google Play / iOS (позже) |
-| Виджеты 4×2 и 2×2 | |
+| Android: расписание, тема, splash, виджеты, офлайн | Карта этажей |
+| **iOS (SwiftUI):** те же экраны, splash, офлайн, свайп назад | Google Play / App Store (публикация) |
 | Backend FastAPI: Excel → парсинг → JSON API | |
-| Админка `/admin` (загрузка Excel, проверка, публикация) | |
-| Свой VPS + домен + HTTPS (Caddy + Let’s Encrypt) | |
-| Контакты кампуса с dksta.ru | |
-| Деплой `deploy.sh`, UFW (закрыть 8000 снаружи), бэкап в админке | |
+| Админка `/admin` + favicon | |
+| VPS + домен **apistudentkgtu.ru** + HTTPS | |
 
-**Версия:** Android `2.3.30` (code 55) · API `2.0.0`
+**Версия:** Android `2.3.30` (code 55) · iOS `1.0` · API `2.0.0`
 
 ---
 
@@ -27,22 +26,16 @@
 | Что | Значение |
 |-----|----------|
 | VPS | `157.22.186.149` |
-| Домен (полный) | **`apistudentkgtu.ru`** (`apistudentkgtu` + зона `.ru`) |
-| API (приложение) | `https://apistudentkgtu.ru/` |
+| Домен | **`apistudentkgtu.ru`** |
+| API | `https://apistudentkgtu.ru/` |
 | Health | `https://apistudentkgtu.ru/health` |
 | Админка | `https://apistudentkgtu.ru/admin` |
 | Путь на сервере | `/opt/studentapp` |
-| Стек на VPS | Docker Compose: FastAPI (`127.0.0.1:8000`) + Caddy (80/443) |
-| Пароль админки | только в `.env` на сервере (не в git) |
-
-### Как устроено
 
 ```
-Админ (Excel) → https://…/admin → парсинг/проверка → SQLite
-Студент (приложение) → HTTPS JSON API → карточки UI / виджеты
+Админ (Excel) → /admin → парсинг → SQLite
+Студент (Android / iOS) → HTTPS JSON → карточки UI
 ```
-
-Студенты **не** получают Excel — только JSON через API.
 
 ---
 
@@ -50,10 +43,10 @@
 
 ```
 app/                 # Android (Kotlin + Jetpack Compose)
-server/              # FastAPI + Docker + Caddyfile
-server/scripts/      # harden_firewall.sh (UFW)
-docs/HTTPS_SETUP.md  # DNS, HTTPS, деплой, чеклист
-deploy.sh            # Деплой backend на VPS с Mac
+ios/                 # iOS (SwiftUI) — open StudentKGTU_IOS.xcodeproj
+server/              # FastAPI + Docker + Caddy + админка
+docs/HTTPS_SETUP.md
+deploy.sh
 ```
 
 ---
@@ -61,8 +54,7 @@ deploy.sh            # Деплой backend на VPS с Mac
 ## Android
 
 ### Стек
-- Jetpack Compose + Material 3
-- Hilt, Room, Retrofit, DataStore, Coroutines + Flow
+- Jetpack Compose + Material 3, Hilt, Room, Retrofit, DataStore
 
 ### Сборка
 ```bash
@@ -72,6 +64,23 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`  
 `BuildConfig.BASE_URL` = `https://apistudentkgtu.ru/`
+
+---
+
+## iOS
+
+Display name: **КГТУ Студент** · API: `https://apistudentkgtu.ru/`
+
+```bash
+open ios/StudentKGTU_IOS.xcodeproj
+```
+
+1. Xcode → выбрать iPhone (или симулятор)  
+2. Signing → Team = ваш Apple ID  
+3. ▶ Run  
+4. На iPhone: **Настройки → Основные → VPN и управление устройством → Доверить**
+
+Подробнее: [`ios/README.md`](ios/README.md)
 
 ---
 
@@ -94,14 +103,12 @@ uvicorn main:app --reload --port 8000
 | GET | `/api/groups?course=` | Группы |
 | GET | `/api/schedule?course=&group=&subgroup=` | Расписание |
 | GET | `/api/teachers` | Преподаватели |
-| GET | `/api/news` | Новости с dksta.ru |
+| GET | `/api/news` | Новости |
 | GET | `/api/week-type` | Числитель/знаменатель |
 | GET | `/admin` | Админ-панель |
 | POST | `/admin/upload` | Загрузка Excel |
-| GET | `/admin/backup/list` | Список файлов бэкапа |
-| GET | `/admin/backup/zip` | ZIP бэкапа (пароль) |
 
-### Деплой HTTPS (с Mac, не с VPS)
+### Деплой HTTPS (с Mac)
 ```bash
 cd ~/StudioProjects/StudentAppKGTA
 ADMIN_PASSWORD='…' DOMAIN='apistudentkgtu.ru' ./deploy.sh
@@ -113,6 +120,6 @@ ADMIN_PASSWORD='…' DOMAIN='apistudentkgtu.ru' ./deploy.sh
 
 ## Что дальше
 
-1. **Карты этажей** — когда будут схемы корпусов.  
-2. По желанию: Google Play, iOS (тот же API).  
+1. **Карты этажей** — Android + iOS, когда будут схемы.  
+2. Публикация в Google Play / App Store (по желанию).  
 3. После деплоя: сменить `ADMIN_PASSWORD`, если пароль светился в чатах.
