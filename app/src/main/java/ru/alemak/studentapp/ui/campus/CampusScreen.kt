@@ -45,12 +45,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.alemak.studentapp.ui.components.AppTopBar
+import ru.alemak.studentapp.ui.components.swipeBack
 import ru.alemak.studentapp.ui.theme.BlueKGTA
+import ru.alemak.studentapp.ui.theme.BlueKGTALight
 import ru.alemak.studentapp.ui.theme.DarkButtonBorder
 import ru.alemak.studentapp.ui.theme.DarkCard
+import ru.alemak.studentapp.ui.theme.DarkNavy
+import ru.alemak.studentapp.ui.theme.DarkOnSurface
+import ru.alemak.studentapp.ui.theme.DarkOnSurfaceMuted
 
 /**
  * Campus + official contacts from https://dksta.ru/kontakty-1
@@ -231,7 +237,8 @@ fun CampusScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(scheme.background)
             .statusBarsPadding()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .swipeBack(onBack),
     ) {
         AppTopBar(title = "Кампус и контакты", onBack = onBack)
 
@@ -559,13 +566,12 @@ private fun ContactCard(
     val border = if (onBlue) null else BorderStroke(1.dp, DarkButtonBorder)
     val titleC = if (onBlue) BlueKGTA else scheme.onSurface
     val muted = if (onBlue) Color(0xFF5F6B7A) else scheme.onSurfaceVariant
-    val accent = if (onBlue) BlueKGTA else scheme.primary
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (item.webUri != null) {
+                if (item.webUri != null && item.phone == null && item.email == null) {
                     Modifier.clickable { onWeb(item.webUri) }
                 } else {
                     Modifier
@@ -592,64 +598,95 @@ private fun ContactCard(
                 Text(text = it, color = muted, fontSize = 12.sp)
             }
 
-            if (item.phone != null || item.email != null || item.webUri != null) {
+            // Dark navy action rows — same look as iOS Campus
+            if (item.phone != null) {
                 Spacer(Modifier.height(10.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (item.phone != null) {
-                        ActionChip(
-                            icon = Icons.Outlined.Phone,
-                            text = item.phone,
-                            accent = accent,
-                            onClick = onCall,
-                        )
-                    }
-                    if (item.email != null) {
-                        ActionChip(
-                            icon = Icons.Outlined.Email,
-                            text = item.email,
-                            accent = accent,
-                            onClick = { onEmail(item.email) },
-                        )
-                    }
-                    if (item.webUri != null && item.phone == null && item.email == null) {
-                        ActionChip(
-                            icon = Icons.Outlined.Info,
-                            text = "Открыть",
-                            accent = accent,
-                            onClick = { onWeb(item.webUri) },
-                        )
-                    }
-                }
+                ContactActionRow(
+                    icon = Icons.Outlined.Phone,
+                    text = item.phone,
+                    button = "Позвонить",
+                    onClick = onCall,
+                )
+            }
+            if (item.email != null) {
+                Spacer(Modifier.height(8.dp))
+                ContactActionRow(
+                    icon = Icons.Outlined.Email,
+                    text = item.email,
+                    button = "Написать",
+                    onClick = { onEmail(item.email) },
+                )
+            }
+            if (item.webUri != null && item.phone == null && item.email == null) {
+                Spacer(Modifier.height(10.dp))
+                ContactActionRow(
+                    icon = Icons.Outlined.Info,
+                    text = "Все контакты на сайте",
+                    button = "Открыть",
+                    onClick = { onWeb(item.webUri) },
+                )
+            } else if (item.webUri != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Открыть на сайте",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(BlueKGTA)
+                        .clickable { onWeb(item.webUri) }
+                        .padding(vertical = 10.dp),
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }
 }
 
+/** Dark navy chip with light text + action button (matches iOS). */
 @Composable
-private fun ActionChip(
+private fun ContactActionRow(
     icon: ImageVector,
     text: String,
-    accent: Color,
+    button: String,
     onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
+            .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(accent.copy(alpha = 0.1f))
+            .background(DarkNavy)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(15.dp))
-        Spacer(Modifier.width(5.dp))
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = DarkOnSurfaceMuted,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(10.dp))
         Text(
             text = text,
-            color = accent,
-            fontSize = 12.sp,
+            color = DarkOnSurface,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = button,
+            color = Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(BlueKGTALight)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         )
     }
 }

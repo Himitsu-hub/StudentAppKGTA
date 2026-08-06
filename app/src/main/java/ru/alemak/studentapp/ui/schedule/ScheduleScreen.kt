@@ -41,6 +41,7 @@ import ru.alemak.studentapp.ui.components.ErrorState
 import ru.alemak.studentapp.ui.components.LoadingState
 import ru.alemak.studentapp.ui.components.OfflineBanner
 import ru.alemak.studentapp.ui.components.UpdatedAtLabel
+import ru.alemak.studentapp.ui.components.swipeBack
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 import ru.alemak.studentapp.util.DateUtils
 import ru.alemak.studentapp.util.HolidayUtils
@@ -63,6 +64,7 @@ fun ScheduleScreen(
     var showSubgroupDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        modifier = Modifier.swipeBack(onBack),
         topBar = {
             AppTopBar(
                 title = "Расписание",

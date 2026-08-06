@@ -57,6 +57,7 @@ import ru.alemak.studentapp.ui.components.AppTopBar
 import ru.alemak.studentapp.ui.components.ErrorState
 import ru.alemak.studentapp.ui.components.LoadingState
 import ru.alemak.studentapp.ui.components.OfflineBanner
+import ru.alemak.studentapp.ui.components.swipeBack
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,6 +71,7 @@ fun TeachersScreen(
     val scheme = MaterialTheme.colorScheme
 
     Scaffold(
+        modifier = Modifier.swipeBack(onBack),
         topBar = {
             AppTopBar(
                 title = "Преподаватели",
@@ -228,6 +230,7 @@ fun TeacherDetailScreen(
     }
 
     Scaffold(
+        modifier = Modifier.swipeBack(onBack),
         topBar = { AppTopBar(title = "Преподаватель", onBack = onBack) },
         containerColor = scheme.background,
     ) { padding ->

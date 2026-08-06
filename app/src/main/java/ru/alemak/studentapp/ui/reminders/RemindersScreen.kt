@@ -75,6 +75,7 @@ import java.util.UUID
 import ru.alemak.studentapp.data.model.Reminder
 import ru.alemak.studentapp.ui.components.AppTopBar
 import ru.alemak.studentapp.ui.components.EmptyState
+import ru.alemak.studentapp.ui.components.swipeBack
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -125,6 +126,7 @@ fun RemindersScreen(
     }
 
     Scaffold(
+        modifier = Modifier.swipeBack(onBack),
         topBar = { AppTopBar(title = "Напоминания", onBack = onBack) },
         containerColor = scheme.background,
         floatingActionButton = {

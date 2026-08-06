@@ -52,8 +52,9 @@ object ScheduleUpdateChecker {
 
     private fun fetchUpdates(): ScheduleUpdatesDto? {
         val client = OkHttpClient.Builder()
-            .connectTimeout(12, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(45, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .build()
         val base = BuildConfig.BASE_URL.trimEnd('/') + "/"
         val request = Request.Builder()
