@@ -22,11 +22,15 @@ if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
 fi
 
 echo "1/6 Copying code to $S:$REMOTE_DIR ..."
-ssh "$S" "mkdir -p $REMOTE_DIR/uploads $REMOTE_DIR/scripts"
+ssh "$S" "mkdir -p $REMOTE_DIR/uploads $REMOTE_DIR/scripts $REMOTE_DIR/static"
 scp "$D/main.py" "$D/database.py" "$D/parser.py" "$D/scraper.py" "$D/news_scraper.py" \
     "$D/schedule_validator.py" \
     "$D/requirements.txt" "$D/Dockerfile" "$D/docker-compose.yml" "$D/Caddyfile" \
     "$S:$REMOTE_DIR/"
+# Favicon / static assets for admin tab icon
+if [[ -d "$D/static" ]]; then
+  scp -r "$D/static/." "$S:$REMOTE_DIR/static/"
+fi
 if [[ -f "$D/scripts/harden_firewall.sh" ]]; then
   scp "$D/scripts/harden_firewall.sh" "$S:$REMOTE_DIR/scripts/"
   ssh "$S" "chmod +x $REMOTE_DIR/scripts/harden_firewall.sh"

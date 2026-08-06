@@ -688,8 +688,9 @@ async def admin_panel():
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Загрузка расписания — StudentApp</title>
-<link rel="icon" type="image/png" href="/static/favicon.png">
-<link rel="shortcut icon" type="image/png" href="/favicon.ico">
+<link rel="icon" type="image/png" href="/static/favicon.png?v=2">
+<link rel="shortcut icon" href="/favicon.ico?v=2">
+<link rel="apple-touch-icon" href="/static/favicon.png?v=2">
 <style>
   :root { --blue:#1a336c; --bg:#eef2f7; --ok:#1b7a3d; --err:#b42318; --warn:#b54708; }
   * { box-sizing: border-box; }
