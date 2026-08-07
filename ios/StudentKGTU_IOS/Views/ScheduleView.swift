@@ -114,12 +114,16 @@ struct ScheduleView: View {
     private func selectionChip(_ text: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text)
-                .font(.body.weight(.medium))
-                .foregroundStyle(theme.isDark ? AppColors.darkOnSurface : .white)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.white) // always white — readable in dark theme
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(theme.isDark ? AppColors.darkButton : AppColors.blueKGTA)
+                .background(theme.isDark ? AppColors.darkNavy : AppColors.blueKGTA)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(theme.isDark ? AppColors.darkButtonBorder : Color.clear, lineWidth: 1)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)

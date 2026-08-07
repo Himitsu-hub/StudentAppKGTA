@@ -59,6 +59,7 @@ import ru.alemak.studentapp.ui.components.LoadingState
 import ru.alemak.studentapp.ui.components.OfflineBanner
 import ru.alemak.studentapp.ui.components.swipeBack
 import ru.alemak.studentapp.ui.theme.BlueKGTA
+import ru.alemak.studentapp.ui.theme.DarkButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -293,6 +294,11 @@ fun TeacherDetailScreen(
                 Spacer(Modifier.height(20.dp))
 
                 if (teacher.email.isNotEmpty()) {
+                    val emailCardBg = if (onBlue) {
+                        Color.White.copy(alpha = 0.15f)
+                    } else {
+                        DarkButton
+                    }
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -302,15 +308,19 @@ fun TeacherDetailScreen(
                                 clipboard.setPrimaryClip(ClipData.newPlainText("email", teacher.email))
                                 Toast.makeText(context, "Email скопирован", Toast.LENGTH_SHORT).show()
                             },
-                        colors = CardDefaults.cardColors(containerColor = scheme.surface),
+                        colors = CardDefaults.cardColors(containerColor = emailCardBg),
                     ) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("Email", color = scheme.onSurfaceVariant)
-                            Text(teacher.email, color = scheme.primary, fontWeight = FontWeight.Medium)
+                            Text("Email", color = Color.White.copy(alpha = 0.75f))
+                            Text(
+                                teacher.email,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                             Text(
                                 "Нажмите, чтобы скопировать",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = scheme.onSurfaceVariant,
+                                color = Color.White.copy(alpha = 0.65f),
                             )
                         }
                     }

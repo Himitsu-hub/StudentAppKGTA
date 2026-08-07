@@ -43,6 +43,7 @@ import ru.alemak.studentapp.ui.components.OfflineBanner
 import ru.alemak.studentapp.ui.components.UpdatedAtLabel
 import ru.alemak.studentapp.ui.components.swipeBack
 import ru.alemak.studentapp.ui.theme.BlueKGTA
+import ru.alemak.studentapp.ui.theme.DarkButton
 import ru.alemak.studentapp.util.DateUtils
 import ru.alemak.studentapp.util.HolidayUtils
 
@@ -202,20 +203,20 @@ fun ScheduleScreen(
 private fun SelectionChip(text: String, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val isLightBrand = scheme.background == BlueKGTA
+    // Dark theme: navy chip + pure white text (primaryContainer was too dim)
+    val chipBg = if (isLightBrand) BlueKGTA else DarkButton
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isLightBrand) BlueKGTA else scheme.primaryContainer,
-        ),
+        colors = CardDefaults.cardColors(containerColor = chipBg),
     ) {
         Text(
             text = text,
-            color = if (isLightBrand) Color.White else scheme.onPrimaryContainer,
-            fontWeight = FontWeight.Medium,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
         )
     }

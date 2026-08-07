@@ -262,17 +262,23 @@ struct TeacherDetailView: View {
                                 copied = true
                             } label: {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Email").font(.caption).foregroundStyle(.secondary)
+                                    Text("Email")
+                                        .font(.caption)
+                                        .foregroundStyle(Color.white.opacity(0.75))
                                     Text(teacher.email)
-                                        .fontWeight(.medium)
-                                        .foregroundStyle(AppColors.blueKGTA)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(Color.white)
                                     Text(copied ? "Скопировано" : "Нажмите, чтобы скопировать")
                                         .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(Color.white.opacity(0.65))
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
-                                .background(theme.isDark ? AppColors.darkCard : Color.white)
+                                .background(theme.isDark ? AppColors.darkNavy : AppColors.blueKGTA.opacity(0.35))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(AppColors.darkButtonBorder.opacity(theme.isDark ? 1 : 0), lineWidth: 1)
+                                )
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
                             .buttonStyle(.plain)
