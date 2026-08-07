@@ -10,6 +10,10 @@ actor ScheduleRepository {
 
     func getGroups(course: Int) async -> [String: [String]] {
         let key = "groups_\(course)"
+        // Offline-first: return disk cache immediately if no network
+        if !NetworkMonitor.shared.isOnline {
+            return JSONCache.load([String: [String]].self, key: key) ?? [:]
+        }
         do {
             let remote = try await APIClient.shared.groups(course: course)
             JSONCache.save(remote, key: key)
@@ -19,35 +23,81 @@ actor ScheduleRepository {
         }
     }
 
+    /// Offline-first schedule: disk cache first when offline; online tries server then cache.
     func getSchedule(course: Int, group: String, subgroup: String?) async -> ScheduleResult {
         let week = DateUtils.currentWeekType()
-        let key = "schedule_\(course)_\(group)_\(subgroup ?? "")_\(week)"
+        let weekKey = Self.cacheKey(course: course, group: group, subgroup: subgroup, week: week)
+        // Stable key so offline still finds last successful download across week flips
+        let latestKey = "schedule_latest_\(course)_\(group)_\(subgroup ?? "")"
+
+        if !NetworkMonitor.shared.isOnline {
+            return cachedResult(weekKey: weekKey, latestKey: latestKey, course: course, group: group, subgroup: subgroup, week: week)
+                ?? emptyOffline(course: course, group: group, subgroup: subgroup, week: week)
+        }
+
         do {
             var remote = try await APIClient.shared.schedule(course: course, group: group, subgroup: subgroup)
             remote.isOffline = false
             remote.fromCache = false
             let now = Date().timeIntervalSince1970 * 1000
             remote.updatedAtMillis = now
-            JSONCache.save(remote, key: key)
-            JSONCache.saveMeta(key: key, updatedAt: now)
+            JSONCache.save(remote, key: weekKey)
+            JSONCache.save(remote, key: latestKey)
+            JSONCache.saveMeta(key: weekKey, updatedAt: now)
+            JSONCache.saveMeta(key: latestKey, updatedAt: now)
             return remote
         } catch {
-            if var cached = JSONCache.load(ScheduleResult.self, key: key) {
-                cached.isOffline = true
-                cached.fromCache = true
-                cached.updatedAtMillis = JSONCache.meta(key: key)
-                return cached
-            }
-            return ScheduleResult(
-                course: course,
-                group: group,
-                subgroup: subgroup,
-                weekType: week,
-                schedule: [],
-                fromCache: false,
-                isOffline: true,
-                updatedAtMillis: 0
-            )
+            return cachedResult(weekKey: weekKey, latestKey: latestKey, course: course, group: group, subgroup: subgroup, week: week)
+                ?? emptyOffline(course: course, group: group, subgroup: subgroup, week: week)
         }
+    }
+
+    /// Instant disk read (no network) for home screen first paint.
+    nonisolated func getScheduleFromCacheOnly(course: Int, group: String, subgroup: String?) -> ScheduleResult? {
+        let week = DateUtils.currentWeekType()
+        let weekKey = Self.cacheKey(course: course, group: group, subgroup: subgroup, week: week)
+        let latestKey = "schedule_latest_\(course)_\(group)_\(subgroup ?? "")"
+        return Self.cachedResult(weekKey: weekKey, latestKey: latestKey)
+    }
+
+    private nonisolated static func cacheKey(course: Int, group: String, subgroup: String?, week: String) -> String {
+        "schedule_\(course)_\(group)_\(subgroup ?? "")_\(week)"
+    }
+
+    private nonisolated static func cachedResult(weekKey: String, latestKey: String) -> ScheduleResult? {
+        if var cached = JSONCache.load(ScheduleResult.self, key: weekKey)
+            ?? JSONCache.load(ScheduleResult.self, key: latestKey) {
+            cached.isOffline = true
+            cached.fromCache = true
+            let meta = JSONCache.meta(key: weekKey)
+            let metaLatest = JSONCache.meta(key: latestKey)
+            cached.updatedAtMillis = max(meta, metaLatest)
+            return cached
+        }
+        return nil
+    }
+
+    private func cachedResult(
+        weekKey: String,
+        latestKey: String,
+        course: Int,
+        group: String,
+        subgroup: String?,
+        week: String
+    ) -> ScheduleResult? {
+        Self.cachedResult(weekKey: weekKey, latestKey: latestKey)
+    }
+
+    private func emptyOffline(course: Int, group: String, subgroup: String?, week: String) -> ScheduleResult {
+        ScheduleResult(
+            course: course,
+            group: group,
+            subgroup: subgroup,
+            weekType: week,
+            schedule: [],
+            fromCache: false,
+            isOffline: true,
+            updatedAtMillis: 0
+        )
     }
 }

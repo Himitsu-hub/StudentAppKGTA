@@ -9,6 +9,8 @@ struct StudentKGTU_IOSApp: App {
     @StateObject private var scheduleCache = ScheduleSessionCache.shared
 
     init() {
+        // Start path monitor early for offline-first loads
+        _ = NetworkMonitor.shared
         ScheduleUpdateChecker.registerBackgroundTask()
     }
 

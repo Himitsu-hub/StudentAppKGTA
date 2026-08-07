@@ -179,12 +179,32 @@ struct TeachersView: View {
     }
 
     private func load() async {
+        // Instant disk cache so offline reopen works
+        if teachers.isEmpty {
+            let disk = TeachersRepository.shared.getTeachersFromCacheOnly()
+            if !disk.isEmpty {
+                teachers = disk
+                usingCached = true
+                departments = ["Все"] + TeacherUtils.departments(teachers)
+                applyFilter()
+            }
+        }
+
+        if !NetworkMonitor.shared.isOnline {
+            isLoading = false
+            usingCached = !teachers.isEmpty
+            error = teachers.isEmpty ? "Нет сети и нет сохранённого списка" : nil
+            return
+        }
+
         let showSpinner = teachers.isEmpty
         if showSpinner { isLoading = true }
         error = nil
         defer { isLoading = false }
         let r = await TeachersRepository.shared.getTeachers()
-        teachers = r.teachers
+        if !r.teachers.isEmpty || teachers.isEmpty {
+            teachers = r.teachers
+        }
         usingCached = r.fromCache
         departments = ["Все"] + TeacherUtils.departments(teachers)
         if !departments.contains(selectedDept) { selectedDept = "Все" }

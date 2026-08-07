@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// In-memory session cache so Schedule screen does not flash-load every open (Android ViewModel-like).
+/// In-memory + disk offline cache for Schedule screen.
 @MainActor
 final class ScheduleSessionCache: ObservableObject {
     static let shared = ScheduleSessionCache()
@@ -21,13 +21,11 @@ final class ScheduleSessionCache: ObservableObject {
         "\(course)|\(group ?? "")|\(subgroup ?? "")"
     }
 
-    /// True if we already have data for this selection in this session.
     func hasData(for prefs: UserPreferences) -> Bool {
         let k = key(course: prefs.course, group: prefs.group, subgroup: prefs.subgroup)
         return loadedKey == k && !schedule.isEmpty
     }
 
-    /// Load: show spinner only if nothing to display; otherwise silent refresh.
     func load(prefs: UserPreferences, force: Bool = false) async {
         guard let group = prefs.group, !group.isEmpty else {
             schedule = []
@@ -40,35 +38,57 @@ final class ScheduleSessionCache: ObservableObject {
         let hasExisting = loadedKey == k && !schedule.isEmpty
         let recent = lastNetworkAt.map { Date().timeIntervalSince($0) < 90 } ?? false
 
-        // Skip network entirely if just opened again within 90s with same selection
         if !force && hasExisting && recent {
             return
         }
 
-        // Spinner only on first open for this selection
+        // Instant disk paint
         if !hasExisting {
+            if let disk = ScheduleRepository.shared.getScheduleFromCacheOnly(
+                course: prefs.course,
+                group: group,
+                subgroup: prefs.subgroup
+            ), !disk.schedule.isEmpty {
+                schedule = disk.schedule
+                weekType = disk.weekType.isEmpty ? DateUtils.currentWeekType() : disk.weekType
+                usingCached = true
+                updatedLabel = TimeFormat.updatedAtLabel(millis: disk.updatedAtMillis)
+                loadedKey = k
+            }
+        }
+
+        // Offline: stop here with cache (or error if empty)
+        if !NetworkMonitor.shared.isOnline {
+            isLoading = schedule.isEmpty
+            error = schedule.isEmpty ? "Нет сети и нет сохранённого расписания" : nil
+            usingCached = !schedule.isEmpty
+            isLoading = false
+            return
+        }
+
+        if schedule.isEmpty {
             isLoading = true
         }
         error = nil
         defer { isLoading = false }
 
-        // Groups (cached by repository too)
         groups = await ScheduleRepository.shared.getGroups(course: prefs.course)
-
         let result = await ScheduleRepository.shared.getSchedule(
             course: prefs.course,
             group: group,
             subgroup: prefs.subgroup
         )
-        schedule = result.schedule
+        if !result.schedule.isEmpty || schedule.isEmpty {
+            schedule = result.schedule
+        }
         weekType = result.weekType.isEmpty ? DateUtils.currentWeekType() : result.weekType
         usingCached = result.isOffline
-        updatedLabel = TimeFormat.updatedAtLabel(millis: result.updatedAtMillis)
+        updatedLabel = TimeFormat.updatedAtLabel(millis: result.updatedAtMillis) ?? updatedLabel
         loadedKey = k
         if !result.isOffline {
             lastNetworkAt = Date()
         }
-        if result.schedule.isEmpty && result.isOffline {
+        if schedule.isEmpty && result.isOffline {
             error = "Нет сети и нет сохранённого расписания"
         }
         await WidgetUpdater.updateNow()

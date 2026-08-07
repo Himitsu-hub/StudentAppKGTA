@@ -312,39 +312,89 @@ struct HomeView: View {
     }
 
     private func refresh(showLoading: Bool) async {
-        // Vacation UI uses onVacation (live date); skip schedule fetch in summer.
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        // 1) Instant paint from disk (no network wait)
+        applyDiskCacheSnapshot()
+        let hadLesson = nextLesson != nil || onVacation
+        let hadNews = !news.isEmpty
+        if showLoading {
+            isLoadingLesson = !hadLesson && !onVacation
+            isLoadingNews = !hadNews
+        }
+
+        // 2) Summer: only refresh news if online; never show next pair
         if HolidayUtils.isSummerVacation() {
             weekType = "Каникулы"
             nextLesson = nil
             isLoadingLesson = false
-            if showLoading { isLoadingNews = true }
-            isRefreshing = true
-            defer { isRefreshing = false }
-            let newsMeta = await loadNews()
-            usingCached = newsMeta.fromCache
-            updatedLabel = TimeFormat.updatedAtLabel(millis: newsMeta.updatedAt)
+            if NetworkMonitor.shared.isOnline {
+                let newsMeta = await loadNews()
+                usingCached = newsMeta.fromCache
+                updatedLabel = TimeFormat.updatedAtLabel(millis: newsMeta.updatedAt) ?? updatedLabel
+            } else {
+                usingCached = true
+                if updatedLabel == nil {
+                    let disk = await NewsRepository.shared.getNewsFromCacheOnly(limit: 10)
+                    updatedLabel = TimeFormat.updatedAtLabel(millis: disk.updatedAt)
+                }
+            }
             isLoadingNews = false
             await WidgetUpdater.updateNow()
             return
         }
 
-        weekType = DateUtils.currentWeekType()
-        if showLoading {
-            isLoadingLesson = true
-            isLoadingNews = true
-        }
-        isRefreshing = true
-        defer { isRefreshing = false }
+        weekType = weekType.isEmpty ? DateUtils.currentWeekType() : weekType
 
+        // 3) Offline: keep disk data, show banner, done
+        if !NetworkMonitor.shared.isOnline {
+            usingCached = true
+            isLoadingLesson = false
+            isLoadingNews = false
+            await WidgetUpdater.updateNow()
+            return
+        }
+
+        // 4) Online: refresh from server (repositories fall back to cache on error)
         async let lessonMeta = loadLesson()
         async let newsMeta = loadNews()
         let (lm, nm) = await (lessonMeta, newsMeta)
         let latest = max(lm.updatedAt, nm.updatedAt)
         usingCached = lm.fromCache || nm.fromCache
-        updatedLabel = TimeFormat.updatedAtLabel(millis: latest)
+        if let label = TimeFormat.updatedAtLabel(millis: latest) {
+            updatedLabel = label
+        }
         isLoadingLesson = false
         isLoadingNews = false
         await WidgetUpdater.updateNow()
+    }
+
+    /// Fill UI from Application Support cache without any network call.
+    private func applyDiskCacheSnapshot() {
+        if HolidayUtils.isSummerVacation() {
+            weekType = "Каникулы"
+            nextLesson = nil
+        } else if let group = prefs.group, !group.isEmpty {
+            if let cached = ScheduleRepository.shared.getScheduleFromCacheOnly(
+                course: prefs.course,
+                group: group,
+                subgroup: prefs.subgroup
+            ), !cached.schedule.isEmpty {
+                nextLesson = ScheduleLogic.findNextLesson(schedule: cached.schedule)
+                weekType = cached.weekType.isEmpty ? DateUtils.currentWeekType() : cached.weekType
+                updatedLabel = TimeFormat.updatedAtLabel(millis: cached.updatedAtMillis) ?? updatedLabel
+                usingCached = true
+            }
+        }
+        let diskNews = NewsRepository.shared.getNewsFromCacheOnly(limit: 10)
+        if !diskNews.news.isEmpty {
+            news = diskNews.news
+            if let label = TimeFormat.updatedAtLabel(millis: diskNews.updatedAt) {
+                updatedLabel = label
+            }
+            usingCached = true
+        }
     }
 
     private func loadLesson() async -> LoadMeta {
@@ -362,14 +412,20 @@ struct HomeView: View {
             group: group,
             subgroup: prefs.subgroup
         )
-        nextLesson = ScheduleLogic.findNextLesson(schedule: result.schedule)
-        weekType = result.weekType.isEmpty ? DateUtils.currentWeekType() : result.weekType
+        if !result.schedule.isEmpty || nextLesson == nil {
+            nextLesson = ScheduleLogic.findNextLesson(schedule: result.schedule)
+        }
+        if !result.weekType.isEmpty {
+            weekType = result.weekType
+        }
         return LoadMeta(fromCache: result.isOffline, updatedAt: result.updatedAtMillis)
     }
 
     private func loadNews() async -> LoadMeta {
         let r = await NewsRepository.shared.getNews(limit: 10)
-        news = r.news
+        if !r.news.isEmpty || news.isEmpty {
+            news = r.news
+        }
         return LoadMeta(fromCache: r.fromCache, updatedAt: r.updatedAt)
     }
 }
