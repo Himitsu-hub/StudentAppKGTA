@@ -179,15 +179,14 @@ struct TeachersView: View {
     }
 
     private func load() async {
-        // Instant disk cache so offline reopen works
-        if teachers.isEmpty {
-            let disk = TeachersRepository.shared.getTeachersFromCacheOnly()
-            if !disk.isEmpty {
-                teachers = disk
-                usingCached = true
-                departments = ["Все"] + TeacherUtils.departments(teachers)
-                applyFilter()
-            }
+        // Always show disk first
+        let disk = TeachersRepository.shared.getTeachersFromCacheOnly()
+        if !disk.isEmpty {
+            teachers = disk
+            usingCached = true
+            departments = ["Все"] + TeacherUtils.departments(teachers)
+            applyFilter()
+            isLoading = false
         }
 
         if !NetworkMonitor.shared.isOnline {
@@ -197,8 +196,7 @@ struct TeachersView: View {
             return
         }
 
-        let showSpinner = teachers.isEmpty
-        if showSpinner { isLoading = true }
+        if teachers.isEmpty { isLoading = true }
         error = nil
         defer { isLoading = false }
         let r = await TeachersRepository.shared.getTeachers()

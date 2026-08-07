@@ -42,24 +42,22 @@ final class ScheduleSessionCache: ObservableObject {
             return
         }
 
-        // Instant disk paint
-        if !hasExisting {
-            if let disk = ScheduleRepository.shared.getScheduleFromCacheOnly(
-                course: prefs.course,
-                group: group,
-                subgroup: prefs.subgroup
-            ), !disk.schedule.isEmpty {
-                schedule = disk.schedule
-                weekType = disk.weekType.isEmpty ? DateUtils.currentWeekType() : disk.weekType
-                usingCached = true
-                updatedLabel = TimeFormat.updatedAtLabel(millis: disk.updatedAtMillis)
-                loadedKey = k
-            }
+        // Always try disk first (even if session already had data)
+        if let disk = ScheduleRepository.shared.getScheduleFromCacheOnly(
+            course: prefs.course,
+            group: group,
+            subgroup: prefs.subgroup
+        ), !disk.schedule.isEmpty {
+            schedule = disk.schedule
+            weekType = disk.weekType.isEmpty ? DateUtils.currentWeekType() : disk.weekType
+            usingCached = true
+            updatedLabel = TimeFormat.updatedAtLabel(millis: disk.updatedAtMillis)
+            loadedKey = k
+            isLoading = false
         }
 
         // Offline: stop here with cache (or error if empty)
         if !NetworkMonitor.shared.isOnline {
-            isLoading = schedule.isEmpty
             error = schedule.isEmpty ? "Нет сети и нет сохранённого расписания" : nil
             usingCached = !schedule.isEmpty
             isLoading = false

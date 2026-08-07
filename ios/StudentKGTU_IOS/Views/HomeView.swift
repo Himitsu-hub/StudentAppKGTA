@@ -315,48 +315,44 @@ struct HomeView: View {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        // 1) Instant paint from disk (no network wait)
+        // Always: paint from disk FIRST — never wait for network to show known data
         applyDiskCacheSnapshot()
-        let hadLesson = nextLesson != nil || onVacation
-        let hadNews = !news.isEmpty
-        if showLoading {
-            isLoadingLesson = !hadLesson && !onVacation
-            isLoadingNews = !hadNews
+        isLoadingLesson = false
+        isLoadingNews = false
+
+        let offline = !NetworkMonitor.shared.isOnline
+
+        // Airplane / no network: stop here with cached UI (or empty if first launch offline)
+        if offline {
+            usingCached = nextLesson != nil || !news.isEmpty || onVacation
+            if onVacation {
+                weekType = "Каникулы"
+                nextLesson = nil
+            }
+            await WidgetUpdater.updateNow()
+            return
         }
 
-        // 2) Summer: only refresh news if online; never show next pair
+        // Online only: background refresh (may update UI when done)
+        if showLoading && nextLesson == nil && !onVacation {
+            isLoadingLesson = true
+        }
+        if showLoading && news.isEmpty {
+            isLoadingNews = true
+        }
+
         if HolidayUtils.isSummerVacation() {
             weekType = "Каникулы"
             nextLesson = nil
             isLoadingLesson = false
-            if NetworkMonitor.shared.isOnline {
-                let newsMeta = await loadNews()
-                usingCached = newsMeta.fromCache
-                updatedLabel = TimeFormat.updatedAtLabel(millis: newsMeta.updatedAt) ?? updatedLabel
-            } else {
-                usingCached = true
-                if updatedLabel == nil {
-                    let disk = await NewsRepository.shared.getNewsFromCacheOnly(limit: 10)
-                    updatedLabel = TimeFormat.updatedAtLabel(millis: disk.updatedAt)
-                }
-            }
+            let newsMeta = await loadNews()
+            usingCached = newsMeta.fromCache
+            updatedLabel = TimeFormat.updatedAtLabel(millis: newsMeta.updatedAt) ?? updatedLabel
             isLoadingNews = false
             await WidgetUpdater.updateNow()
             return
         }
 
-        weekType = weekType.isEmpty ? DateUtils.currentWeekType() : weekType
-
-        // 3) Offline: keep disk data, show banner, done
-        if !NetworkMonitor.shared.isOnline {
-            usingCached = true
-            isLoadingLesson = false
-            isLoadingNews = false
-            await WidgetUpdater.updateNow()
-            return
-        }
-
-        // 4) Online: refresh from server (repositories fall back to cache on error)
         async let lessonMeta = loadLesson()
         async let newsMeta = loadNews()
         let (lm, nm) = await (lessonMeta, newsMeta)

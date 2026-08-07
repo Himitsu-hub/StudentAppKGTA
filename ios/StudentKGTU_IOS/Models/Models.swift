@@ -53,7 +53,7 @@ struct ScheduleResult: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case course, group, subgroup, weekType, schedule, fromCache
+        case course, group, subgroup, weekType, schedule, fromCache, isOffline, updatedAtMillis
     }
 
     init(from decoder: Decoder) throws {
@@ -64,8 +64,8 @@ struct ScheduleResult: Codable {
         weekType = try c.decodeIfPresent(String.self, forKey: .weekType) ?? ""
         schedule = try c.decodeIfPresent([ScheduleDay].self, forKey: .schedule) ?? []
         fromCache = try c.decodeIfPresent(Bool.self, forKey: .fromCache) ?? false
-        isOffline = false
-        updatedAtMillis = 0
+        isOffline = try c.decodeIfPresent(Bool.self, forKey: .isOffline) ?? false
+        updatedAtMillis = try c.decodeIfPresent(Double.self, forKey: .updatedAtMillis) ?? 0
     }
 
     func encode(to encoder: Encoder) throws {
@@ -76,6 +76,8 @@ struct ScheduleResult: Codable {
         try c.encode(weekType, forKey: .weekType)
         try c.encode(schedule, forKey: .schedule)
         try c.encode(fromCache, forKey: .fromCache)
+        try c.encode(isOffline, forKey: .isOffline)
+        try c.encode(updatedAtMillis, forKey: .updatedAtMillis)
     }
 }
 
