@@ -186,12 +186,43 @@ def health():
     return {"status": "ok", "version": "2.0.0"}
 
 
+def _normalize_teacher_position(pos: str) -> str:
+    """Fix common glued words from source HTML (e.g. Заведующийинтеллектуальных)."""
+    import re
+
+    if not pos:
+        return pos
+    s = pos.replace("\xa0", " ").replace("\u200b", "")
+    fixes = [
+        ("Заведующийинтеллектуальных", "Заведующий кафедрой интеллектуальных"),
+        ("заведующийинтеллектуальных", "заведующий кафедрой интеллектуальных"),
+        ("системи комплексов", "систем и комплексов"),
+        ("системикомплексов", "систем и комплексов"),
+        ("наукдоцент", "наук, доцент"),
+        ("ДоцентНачальник", "Доцент, начальник"),
+        ("преподавательЗаместитель", "преподаватель, заместитель"),
+        ("электроникиКафедра", "электроники. Кафедра"),
+        ("кафедрыНачальник", "кафедры, начальник"),
+    ]
+    for a, b in fixes:
+        s = s.replace(a, b)
+    s = re.sub(r",([^\s])", r", \1", s)
+    s = re.sub(r";([^\s])", r"; \1", s)
+    s = re.sub(r"([а-яё])([А-ЯЁ])", r"\1, \2", s)
+    s = re.sub(r"[ \t]+", " ", s)
+    return s.strip(" ,;")
+
+
 @app.get("/api/teachers")
 def get_teachers():
     if not TEACHERS_FILE.exists():
         return {"teachers": []}
     with open(TEACHERS_FILE, "r", encoding="utf-8") as f:
         teachers = json.load(f)
+    if isinstance(teachers, list):
+        for t in teachers:
+            if isinstance(t, dict) and "position" in t:
+                t["position"] = _normalize_teacher_position(str(t.get("position") or ""))
     return {"teachers": teachers}
 
 

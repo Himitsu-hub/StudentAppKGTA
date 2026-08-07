@@ -354,7 +354,7 @@ struct HomeView: View {
             nextLesson = nil
             isLoadingLesson = false
             let newsMeta = await loadNews()
-            usingCached = newsMeta.fromCache
+            usingCached = !NetworkMonitor.shared.isOnline
             updatedLabel = TimeFormat.updatedAtLabel(millis: newsMeta.updatedAt) ?? updatedLabel
             isLoadingNews = false
             await WidgetUpdater.updateNow()
@@ -365,7 +365,8 @@ struct HomeView: View {
         async let newsMeta = loadNews()
         let (lm, nm) = await (lessonMeta, newsMeta)
         let latest = max(lm.updatedAt, nm.updatedAt)
-        usingCached = lm.fromCache || nm.fromCache
+        // Banner only if truly offline — not when online with any cached fallback
+        usingCached = !NetworkMonitor.shared.isOnline
         if let label = TimeFormat.updatedAtLabel(millis: latest) {
             updatedLabel = label
         }

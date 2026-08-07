@@ -143,9 +143,11 @@ class HomeViewModel @Inject constructor(
                 val latest = listOfNotNull(lessonMeta.updatedAt, newsMeta.updatedAt)
                     .filter { it > 0L }
                     .maxOrNull() ?: 0L
+                // Show offline banner only when offline (not merely when one source used cache)
+                val offline = !isOnline.value
                 _uiState.update {
                     it.copy(
-                        usingCachedData = lessonMeta.fromCache || newsMeta.fromCache,
+                        usingCachedData = offline && (lessonMeta.fromCache || newsMeta.fromCache),
                         updatedLabel = TimeFormat.updatedAtLabel(latest),
                         isRefreshing = false,
                     )

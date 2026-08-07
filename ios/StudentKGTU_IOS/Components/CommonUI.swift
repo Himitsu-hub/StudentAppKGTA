@@ -4,11 +4,14 @@ import UIKit
 #endif
 
 struct OfflineBanner: View {
+    /// Only show when device is actually offline (not when online + cached).
     let visible: Bool
     var updatedLabel: String? = nil
 
     var body: some View {
-        if visible {
+        // Never claim «нет сети» if NetworkMonitor says online (VPN false positives fixed on monitor side)
+        let reallyOffline = visible && !NetworkMonitor.shared.isOnline
+        if reallyOffline {
             let text: String = {
                 if let updatedLabel, !updatedLabel.isEmpty {
                     return "Нет сети · \(updatedLabel)"
