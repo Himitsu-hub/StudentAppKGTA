@@ -22,6 +22,7 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
 
@@ -50,22 +51,19 @@ def _date_sort_key(item: dict[str, Any]) -> float:
     return 0.0
 
 
-def scrape_news(limit: int = 10) -> list[dict[str, Any]]:
-    """Return freshest news. On successful scrape always overwrite cache."""
-    cached = load_cached_news()
+def _clean_title(title: str, date: str) -> str:
+    title = (title or "").strip()
+    if date and date in title:
+        title = title.replace(date, "").strip(" ·|-–—")
+    # Drop trailing date-like noise
+    title = re.sub(r"\s+\d{2}\.\d{2}\.\d{4}\s*$", "", title).strip()
+    return title
 
-    try:
-        resp = requests.get(NEWS_URL, headers=HEADERS, timeout=20)
-        resp.raise_for_status()
-    except Exception as exc:
-        print(f"[news] fetch failed: {exc}")
-        return _sorted(cached)[:limit]
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+def _parse_news_wrap(soup: BeautifulSoup) -> list[dict[str, Any]]:
     news_wrap = soup.find("div", class_="news-wrap")
     if not news_wrap:
-        print("[news] news-wrap not found, using cache")
-        return _sorted(cached)[:limit]
+        return []
 
     scraped: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
@@ -100,6 +98,7 @@ def scrape_news(limit: int = 10) -> list[dict[str, Any]]:
         text = div.get_text(" ", strip=True)
         date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", text)
         date = date_match.group(1) if date_match else ""
+        title = _clean_title(title, date)
 
         desc = ""
         p_tag = div.find("p")
@@ -120,23 +119,70 @@ def scrape_news(limit: int = 10) -> list[dict[str, Any]]:
                 "description": desc,
             }
         )
+    return scraped
+
+
+def _fetch_soup(url: str) -> BeautifulSoup | None:
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=25)
+        resp.raise_for_status()
+        return BeautifulSoup(resp.text, "html.parser")
+    except Exception as exc:
+        print(f"[news] fetch failed {url}: {exc}")
+        return None
+
+
+def _merge_news(scraped: list[dict[str, Any]], cached: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge by URL: scraped wins; keep older cache items not in scrape."""
+    by_url: dict[str, dict[str, Any]] = {}
+    for item in cached:
+        u = item.get("url") or ""
+        if u:
+            by_url[u] = item
+    for item in scraped:
+        u = item.get("url") or ""
+        if u:
+            by_url[u] = item
+    return _sorted(list(by_url.values()))
+
+
+def scrape_news(limit: int = 15) -> list[dict[str, Any]]:
+    """
+    Return freshest news.
+    Scrapes homepage + a few listing pages, merges into cache so VPS
+    partial scrapes never wipe newer posts permanently.
+    """
+    cached = load_cached_news()
+    scraped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    # Homepage first, then paginated lists (site uses novosti/p/N)
+    page_urls = [NEWS_URL] + [
+        urljoin(BASE_URL + "/", f"novosti/p/{i}") for i in range(1, 4)
+    ]
+
+    for page_url in page_urls:
+        soup = _fetch_soup(page_url)
+        if not soup:
+            continue
+        for item in _parse_news_wrap(soup):
+            u = item.get("url") or ""
+            if u and u not in seen:
+                seen.add(u)
+                scraped.append(item)
+        if len(scraped) >= max(limit, 12):
+            break
 
     if not scraped:
         print("[news] scrape empty, using cache")
         return _sorted(cached)[:limit]
 
-    fresh = _sorted(scraped)
-
-    # Some hosts (VPS) get a stripped HTML page → 1 item only.
-    # Don't wipe a good cache with a weak scrape.
-    if len(fresh) < 3 and len(cached) >= 3:
-        print(f"[news] weak scrape ({len(fresh)}), keeping cache ({len(cached)})")
-        return _sorted(cached)[:limit]
-
-    # Full scrape: replace cache entirely (no leftover old June news)
-    save_news_cache(fresh)
-    print(f"[news] scraped={len(fresh)} cache replaced")
-    return fresh[:limit]
+    merged = _merge_news(scraped, cached)
+    # Keep a reasonable history for clients
+    merged = merged[:80]
+    save_news_cache(merged)
+    print(f"[news] scraped={len(scraped)} merged={len(merged)} -> return {min(limit, len(merged))}")
+    return merged[:limit]
 
 
 def _sorted(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

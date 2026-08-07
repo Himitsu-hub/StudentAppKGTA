@@ -108,6 +108,17 @@ struct HomeView: View {
             guard !didInitialLoad else { return }
             didInitialLoad = true
             await refresh(showLoading: true)
+            // Poll news every 15 minutes while home is alive
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15 * 60 * 1_000_000_000)
+                if NetworkMonitor.shared.isOnline {
+                    let meta = await loadNews()
+                    if meta.updatedAt > 0 {
+                        updatedLabel = TimeFormat.updatedAtLabel(millis: meta.updatedAt) ?? updatedLabel
+                    }
+                    usingCached = meta.fromCache ? true : usingCached
+                }
+            }
         }
         .onChange(of: prefs.course) { _, _ in
             Task { await refresh(showLoading: false) }
@@ -415,12 +426,15 @@ struct HomeView: View {
     }
 
     private func loadNews() async -> LoadMeta {
-        let r = await NewsRepository.shared.getNews(limit: 10)
-        if !r.news.isEmpty || news.isEmpty {
+        let r = await NewsRepository.shared.getNews(limit: 15)
+        // Prefer non-empty remote; never wipe good cache with empty response
+        if !r.news.isEmpty {
             news = r.news
+        } else if news.isEmpty {
+            let disk = NewsRepository.shared.getNewsFromCacheOnly(limit: 15)
+            news = disk.news
         }
-        // Cache images for offline
-        ImageDiskCache.prefetch(urls: r.news.map(\.imageUrl))
+        ImageDiskCache.prefetch(urls: news.map(\.imageUrl))
         return LoadMeta(fromCache: r.fromCache, updatedAt: r.updatedAt)
     }
 }

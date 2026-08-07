@@ -137,6 +137,26 @@ def ensure_course_indexed(db: Session, course: int, force: bool = False) -> None
         index_course_file(db, course)
 
 
+def _news_refresh_loop(interval_sec: int = 20 * 60) -> None:
+    """Background: re-scrape dksta.ru every 20 minutes so cache stays fresh."""
+    import threading
+    import time
+
+    from news_scraper import scrape_news
+
+    def worker() -> None:
+        while True:
+            try:
+                n = scrape_news(20)
+                print(f"[news-loop] refreshed {len(n)} items")
+            except Exception as exc:
+                print(f"[news-loop] error: {exc}")
+            time.sleep(interval_sec)
+
+    t = threading.Thread(target=worker, name="news-refresh", daemon=True)
+    t.start()
+
+
 @app.on_event("startup")
 def startup():
     init_db()
@@ -150,6 +170,15 @@ def startup():
                 print(f"Startup index course {course}: {exc}")
     finally:
         db.close()
+
+    # Warm news cache immediately + keep refreshing in background
+    try:
+        from news_scraper import scrape_news
+
+        scrape_news(20)
+    except Exception as exc:
+        print(f"[news] startup scrape: {exc}")
+    _news_refresh_loop(20 * 60)
 
 
 @app.get("/health")
@@ -167,11 +196,16 @@ def get_teachers():
 
 
 @app.get("/api/news")
-def get_news(limit: int = Query(10, ge=1, le=50)):
-    """Live scrape from dksta.ru; on success overwrites news_cache.json."""
-    from news_scraper import scrape_news
+def get_news(limit: int = Query(15, ge=1, le=50)):
+    """Live scrape from dksta.ru; merges into news_cache.json (never stuck on old posts)."""
+    from news_scraper import load_cached_news, scrape_news
 
-    news = scrape_news(limit)
+    # Prefer a fresh scrape; on failure still return whatever is in cache
+    try:
+        news = scrape_news(limit)
+    except Exception as exc:
+        print(f"[news] api scrape failed: {exc}")
+        news = load_cached_news()[:limit]
     return {"news": news, "count": len(news)}
 
 

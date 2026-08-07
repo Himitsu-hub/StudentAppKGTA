@@ -19,13 +19,13 @@ class NewsRepository @Inject constructor(
     private val api: ScheduleApi,
     private val newsDao: NewsDao,
 ) {
-    suspend fun getNews(limit: Int = 10): NewsLoadResult {
-        // Always try the server first — don't trust ConnectivityManager alone
+    suspend fun getNews(limit: Int = 15): NewsLoadResult {
+        // Always try the server first — replace local cache when remote is non-empty
         val remote = runCatching {
             api.getNews(limit).news.map { it.toDomain() }
         }.getOrNull()
 
-        if (remote != null) {
+        if (remote != null && remote.isNotEmpty()) {
             val now = System.currentTimeMillis()
             newsDao.clear()
             newsDao.upsertAll(
@@ -39,6 +39,10 @@ class NewsRepository @Inject constructor(
         val cachedEntities = newsDao.getAll()
         val cached = cachedEntities.map { it.toDomain() }
         val updatedAt = cachedEntities.maxOfOrNull { it.updatedAt } ?: 0L
+        // Empty remote (or fail) → keep previous cache rather than blank home
+        if (remote != null && remote.isEmpty() && cached.isNotEmpty()) {
+            return NewsLoadResult(cached, fromCache = true, updatedAtMillis = updatedAt)
+        }
         return NewsLoadResult(
             news = cached,
             fromCache = cached.isNotEmpty(),

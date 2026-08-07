@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import ru.alemak.studentapp.data.local.UserPreferences
 import ru.alemak.studentapp.data.model.Lesson
@@ -74,6 +76,29 @@ class HomeViewModel @Inject constructor(
                         _uiState.update { it.copy(usingCachedData = true) }
                     }
                 }
+        }
+        // Periodically re-fetch news while home is alive (~15 min)
+        viewModelScope.launch {
+            while (isActive) {
+                delay(15 * 60 * 1000L)
+                loadNewsOnly()
+            }
+        }
+    }
+
+    private suspend fun loadNewsOnly() {
+        try {
+            val result = newsRepository.getNews(15)
+            _uiState.update {
+                it.copy(
+                    news = result.news,
+                    usingCachedData = if (result.fromCache) true else it.usingCachedData,
+                    updatedLabel = TimeFormat.updatedAtLabel(result.updatedAtMillis)
+                        ?: it.updatedLabel,
+                )
+            }
+        } catch (_: Exception) {
+            // keep previous news
         }
     }
 
@@ -193,7 +218,7 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadNews(): LoadMeta {
         return try {
-            val result = newsRepository.getNews(10)
+            val result = newsRepository.getNews(15)
             _uiState.update {
                 it.copy(
                     news = result.news,
