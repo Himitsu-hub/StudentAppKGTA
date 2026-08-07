@@ -152,14 +152,11 @@ struct TeachersView: View {
 
     @ViewBuilder
     private func avatar(_ teacher: Teacher, size: CGFloat) -> some View {
-        if !teacher.photoUrl.isEmpty, let url = URL(string: teacher.photoUrl) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let img):
-                    img.resizable().scaledToFill()
-                default:
-                    placeholderAvatar(teacher, size: size)
-                }
+        if !teacher.photoUrl.isEmpty {
+            CachedAsyncImage(urlString: teacher.photoUrl) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                placeholderAvatar(teacher, size: size)
             }
             .frame(width: size, height: size)
             .clipShape(Circle())
@@ -208,6 +205,7 @@ struct TeachersView: View {
         if !departments.contains(selectedDept) { selectedDept = "Все" }
         applyFilter()
         if teachers.isEmpty { error = "Не удалось загрузить преподавателей" }
+        ImageDiskCache.prefetch(urls: teachers.map(\.photoUrl))
     }
 
     private func applyFilter() {
@@ -319,12 +317,15 @@ struct TeacherDetailView: View {
 
     @ViewBuilder
     private func avatar(_ teacher: Teacher, size: CGFloat) -> some View {
-        if !teacher.photoUrl.isEmpty, let url = URL(string: teacher.photoUrl) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let img): img.resizable().scaledToFill()
-                default:
+        if !teacher.photoUrl.isEmpty {
+            CachedAsyncImage(urlString: teacher.photoUrl) { img in
+                img.resizable().scaledToFill()
+            } placeholder: {
+                ZStack {
                     Circle().fill(Color.white.opacity(0.2))
+                    Text(String(teacher.name.prefix(1)))
+                        .font(.system(size: size / 2.5, weight: .bold))
+                        .foregroundStyle(.white)
                 }
             }
             .frame(width: size, height: size)

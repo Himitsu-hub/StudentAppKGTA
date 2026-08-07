@@ -244,14 +244,11 @@ struct HomeView: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                if !item.imageUrl.isEmpty, let url = URL(string: item.imageUrl) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable().scaledToFill()
-                        default:
-                            Color.gray.opacity(0.2)
-                        }
+                if !item.imageUrl.isEmpty {
+                    CachedAsyncImage(urlString: item.imageUrl) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        Color.gray.opacity(0.2)
                     }
                     .frame(width: 46, height: 46)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -422,6 +419,8 @@ struct HomeView: View {
         if !r.news.isEmpty || news.isEmpty {
             news = r.news
         }
+        // Cache images for offline
+        ImageDiskCache.prefetch(urls: r.news.map(\.imageUrl))
         return LoadMeta(fromCache: r.fromCache, updatedAt: r.updatedAt)
     }
 }
