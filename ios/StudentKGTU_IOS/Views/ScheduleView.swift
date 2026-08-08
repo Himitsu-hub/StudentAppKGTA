@@ -72,50 +72,102 @@ struct ScheduleView: View {
             // No spinner if session cache already has this group (Android-like)
             await cache.load(prefs: prefs, force: false)
         }
-        .confirmationDialog("Выберите курс", isPresented: $showCourse, titleVisibility: .visible) {
-            ForEach(1...4, id: \.self) { c in
-                Button("\(c) курс") {
-                    prefs.save(course: c, group: nil, subgroup: nil)
-                    cache.invalidate()
-                    Task {
+        .sheet(isPresented: $showCourse) {
+            schedulePickerSheet(
+                title: "Выберите курс",
+                labels: (1...4).map { "\($0) курс" }
+            ) { index in
+                let c = index + 1
+                prefs.save(course: c, group: nil, subgroup: nil)
+                cache.invalidate()
+                Task {
+                    await cache.load(prefs: prefs, force: true)
+                    if prefs.group == nil, let first = cache.groups.keys.sorted().first {
+                        prefs.save(course: c, group: first, subgroup: cache.groups[first]?.first)
                         await cache.load(prefs: prefs, force: true)
-                        if prefs.group == nil, let first = cache.groups.keys.sorted().first {
-                            prefs.save(course: c, group: first, subgroup: cache.groups[first]?.first)
-                            await cache.load(prefs: prefs, force: true)
-                        }
                     }
                 }
             }
-            Button("Отмена", role: .cancel) {}
         }
-        .confirmationDialog("Выберите группу", isPresented: $showGroup, titleVisibility: .visible) {
-            ForEach(cache.groups.keys.sorted(), id: \.self) { name in
-                Button(name) {
-                    let sub = cache.groups[name]?.first
-                    prefs.save(course: prefs.course, group: name, subgroup: sub)
-                    cache.invalidate()
-                    Task { await cache.load(prefs: prefs, force: true) }
+        .sheet(isPresented: $showGroup) {
+            let names = cache.groups.keys.sorted()
+            schedulePickerSheet(title: "Выберите группу", labels: names) { index in
+                let name = names[index]
+                let sub = cache.groups[name]?.first
+                prefs.save(course: prefs.course, group: name, subgroup: sub)
+                cache.invalidate()
+                Task { await cache.load(prefs: prefs, force: true) }
+            }
+        }
+        .sheet(isPresented: $showSubgroup) {
+            let subs = cache.groups[prefs.group ?? ""] ?? []
+            schedulePickerSheet(title: "Подгруппа", labels: subs) { index in
+                let sub = subs[index]
+                prefs.save(course: prefs.course, group: prefs.group, subgroup: sub)
+                cache.invalidate()
+                Task { await cache.load(prefs: prefs, force: true) }
+            }
+        }
+    }
+
+    /// High-contrast picker: navy background, white labels (readable in dark theme).
+    private func schedulePickerSheet(
+        title: String,
+        labels: [String],
+        onPick: @escaping (Int) -> Void
+    ) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
+                        Button {
+                            onPick(index)
+                            showCourse = false
+                            showGroup = false
+                            showSubgroup = false
+                        } label: {
+                            Text(label)
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(Color.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 16)
+                                .background(AppColors.darkButton)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(16)
+            }
+            .background(AppColors.darkNavy.ignoresSafeArea())
+            .navigationTitle(title)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") {
+                        showCourse = false
+                        showGroup = false
+                        showSubgroup = false
+                    }
+                    .foregroundStyle(Color.white)
                 }
             }
-            Button("Отмена", role: .cancel) {}
+            .toolbarBackground(AppColors.darkNavy, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
         }
-        .confirmationDialog("Подгруппа", isPresented: $showSubgroup, titleVisibility: .visible) {
-            ForEach(cache.groups[prefs.group ?? ""] ?? [], id: \.self) { sub in
-                Button(sub) {
-                    prefs.save(course: prefs.course, group: prefs.group, subgroup: sub)
-                    cache.invalidate()
-                    Task { await cache.load(prefs: prefs, force: true) }
-                }
-            }
-            Button("Отмена", role: .cancel) {}
-        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     private func selectionChip(_ text: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(Color.white) // always white — readable in dark theme
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)

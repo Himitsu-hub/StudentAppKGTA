@@ -44,6 +44,7 @@ import ru.alemak.studentapp.ui.components.UpdatedAtLabel
 import ru.alemak.studentapp.ui.components.swipeBack
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 import ru.alemak.studentapp.ui.theme.DarkButton
+import ru.alemak.studentapp.ui.theme.DarkNavy
 import ru.alemak.studentapp.util.DateUtils
 import ru.alemak.studentapp.util.HolidayUtils
 
@@ -231,12 +232,15 @@ private fun <T> SimpleListDialog(
 ) {
     val scheme = MaterialTheme.colorScheme
     val isLightBrand = scheme.background == BlueKGTA
-    val cardBg = if (isLightBrand) Color.White else scheme.surface
-    val itemBg = if (isLightBrand) Color(0xFFF0F3F8) else scheme.surfaceVariant
-    val textColor = if (isLightBrand) Color(0xFF1A1A1A) else scheme.onSurface
+    // High contrast: dark navy dialog + white labels (readable in dark theme)
+    val dialogBg = if (isLightBrand) Color.White else DarkNavy
+    val itemBg = if (isLightBrand) Color(0xFFF0F3F8) else DarkButton
+    val titleColor = if (isLightBrand) Color(0xFF1A1A1A) else Color.White
+    val itemText = if (isLightBrand) Color(0xFF1A1A1A) else Color.White
+    val cancelColor = if (isLightBrand) BlueKGTA else Color.White
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontWeight = FontWeight.Bold, color = textColor) },
+        title = { Text(title, fontWeight = FontWeight.Bold, color = titleColor) },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(items, key = { it.first }) { (label, value) ->
@@ -250,8 +254,8 @@ private fun <T> SimpleListDialog(
                     ) {
                         Text(
                             text = label,
-                            color = textColor,
-                            fontWeight = FontWeight.Medium,
+                            color = itemText,
+                            fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
                             style = MaterialTheme.typography.bodyLarge,
                         )
@@ -261,10 +265,10 @@ private fun <T> SimpleListDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена", color = if (isLightBrand) BlueKGTA else scheme.primary)
+                Text("Отмена", color = cancelColor, fontWeight = FontWeight.SemiBold)
             }
         },
-        containerColor = cardBg,
+        containerColor = dialogBg,
     )
 }
 
