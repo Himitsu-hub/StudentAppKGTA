@@ -80,8 +80,6 @@ import ru.alemak.studentapp.ui.components.AppTopBar
 import ru.alemak.studentapp.ui.components.EmptyState
 import ru.alemak.studentapp.ui.components.swipeBack
 import ru.alemak.studentapp.ui.theme.BlueKGTA
-import ru.alemak.studentapp.ui.theme.DarkButton
-import ru.alemak.studentapp.ui.theme.DarkNavy
 import ru.alemak.studentapp.ui.theme.SuccessGreen
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -351,13 +349,14 @@ private fun ReminderEditorDialog(
     var hour by remember { mutableIntStateOf(calendar.get(Calendar.HOUR_OF_DAY)) }
     var minute by remember { mutableIntStateOf(calendar.get(Calendar.MINUTE)) }
 
-    // Dark navy dialog + pure white action labels (readable in dark theme)
-    val dialogBg = if (isLightBrand) Color.White else DarkNavy
-    val fieldBg = if (isLightBrand) Color(0xFFF0F3F8) else DarkButton
+    // Theme-aware: light white sheet / dark soft card (not pure black navy)
+    val dialogBg = if (isLightBrand) Color.White else Color(0xFF1E283C)
+    val fieldBg = if (isLightBrand) Color(0xFFF0F3F8) else Color(0xFF2E3D5C)
     val titleColor = if (isLightBrand) Color(0xFF1A1A1A) else Color.White
     val bodyColor = if (isLightBrand) Color(0xFF1A1A1A) else Color.White
     val mutedColor = if (isLightBrand) Color(0xFF5F6B7A) else Color(0xFFA8B2C4)
-    val actionWhite = Color.White
+    val accent = if (isLightBrand) Color(0xFF4A7BC8) else Color(0xFF7B9FD4)
+    val cancelColor = if (isLightBrand) Color(0xFF4A7BC8) else Color.White
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(16.dp), color = dialogBg) {
@@ -379,11 +378,13 @@ private fun ReminderEditorDialog(
                         focusedTextColor = bodyColor,
                         unfocusedTextColor = bodyColor,
                         disabledTextColor = mutedColor,
-                        cursorColor = if (isLightBrand) BlueKGTA else Color.White,
-                        focusedLabelColor = if (isLightBrand) BlueKGTA else Color.White,
+                        cursorColor = accent,
+                        focusedLabelColor = accent,
                         unfocusedLabelColor = mutedColor,
-                        focusedBorderColor = if (isLightBrand) BlueKGTA else Color.White,
+                        focusedBorderColor = accent,
                         unfocusedBorderColor = mutedColor,
+                        focusedContainerColor = fieldBg,
+                        unfocusedContainerColor = fieldBg,
                     ),
                 )
                 Spacer(Modifier.height(12.dp))
@@ -457,7 +458,7 @@ private fun ReminderEditorDialog(
                     TextButton(onClick = onDismiss) {
                         Text(
                             "Отмена",
-                            color = if (isLightBrand) BlueKGTA else actionWhite,
+                            color = cancelColor,
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -480,7 +481,7 @@ private fun ReminderEditorDialog(
                         },
                         enabled = text.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isLightBrand) BlueKGTA else Color(0xFF3A5A8C),
+                            containerColor = accent,
                             contentColor = Color.White,
                             disabledContainerColor = if (isLightBrand) Color(0xFFCCD5E0) else Color(0xFF243049),
                             disabledContentColor = if (isLightBrand) Color(0xFF5F6B7A) else Color(0xFF6A7A94),

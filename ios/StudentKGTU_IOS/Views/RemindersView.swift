@@ -64,26 +64,61 @@ struct RemindersView: View {
         }
     }
 
-    /// High-contrast editor: white «Отмена» / «Сохранить» on dark navy sheet.
+    /// Theme-aware editor: readable light sheet in light mode, soft card (not pure black) in dark.
     private func reminderEditorSheet(_ rem: Reminder) -> some View {
-        NavigationStack {
-            Form {
-                TextField("Текст", text: $draftText)
-                DatePicker("Когда", selection: $draftDate)
+        let isDark = theme.isDark
+        // Dark: elevated card (readable). Light: clean white.
+        let sheetBg = isDark
+            ? Color(red: 0x1E / 255, green: 0x28 / 255, blue: 0x3C / 255)
+            : Color.white
+        let fieldBg = isDark
+            ? Color(red: 0x2E / 255, green: 0x3D / 255, blue: 0x5C / 255)
+            : Color(red: 0xF0 / 255, green: 0xF3 / 255, blue: 0xF8 / 255)
+        let titleColor: Color = isDark ? .white : AppColors.textPrimary
+        let bodyColor: Color = isDark ? .white : AppColors.textPrimary
+        let mutedColor: Color = isDark ? AppColors.darkOnSurfaceMuted : AppColors.textSecondary
+        let actionColor: Color = isDark ? .white : AppColors.blueKGTALight
+        let canSave = !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        return NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Текст")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(mutedColor)
+                    TextField("Что напомнить?", text: $draftText)
+                        .foregroundStyle(bodyColor)
+                        .padding(14)
+                        .background(fieldBg)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .tint(isDark ? Color.white : AppColors.blueKGTA)
+
+                    Text("Когда")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(mutedColor)
+                    DatePicker("", selection: $draftDate)
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                        .colorScheme(isDark ? .dark : .light)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(fieldBg)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .padding(20)
             }
-            .scrollContentBackground(.hidden)
-            .background(AppColors.darkNavy)
+            .background(sheetBg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(rem.text.isEmpty ? "Новое" : "Изменить")
                         .font(.headline.weight(.bold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(titleColor)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { editor = nil }
                         .fontWeight(.semibold)
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(actionColor)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Сохранить") {
@@ -95,17 +130,17 @@ struct RemindersView: View {
                         editor = nil
                     }
                     .fontWeight(.bold)
-                    .foregroundStyle(Color.white)
-                    .disabled(draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .foregroundStyle(canSave ? actionColor : mutedColor)
+                    .disabled(!canSave)
                 }
             }
-            .toolbarBackground(AppColors.darkNavy, for: .navigationBar)
+            .toolbarBackground(sheetBg, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(isDark ? .dark : .light, for: .navigationBar)
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(isDark ? .dark : .light)
         .presentationDetents([.medium])
-        .presentationBackground(AppColors.darkNavy)
+        .presentationBackground(sheetBg)
     }
 
     private func reminderRow(_ r: Reminder) -> some View {

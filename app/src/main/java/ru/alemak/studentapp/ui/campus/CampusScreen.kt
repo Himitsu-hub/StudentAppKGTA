@@ -424,6 +424,17 @@ private fun HeaderCard(
     }
 }
 
+/** Light-theme action pills: medium blue (not heavy navy). */
+private val ActionPillLight = Color(0xFF4A7BC8)
+
+@Composable
+private fun campusIconTint(onBlue: Boolean): Color =
+    if (onBlue) BlueKGTA else DarkOnSurfaceMuted
+
+@Composable
+private fun actionPillBg(onBlue: Boolean): Color =
+    if (onBlue) ActionPillLight else BlueKGTALight
+
 @Composable
 private fun InfoRow(
     icon: ImageVector,
@@ -441,7 +452,7 @@ private fun InfoRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (onBlue) BlueKGTA else MaterialTheme.colorScheme.primary,
+            tint = campusIconTint(onBlue),
             modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.width(10.dp))
@@ -455,13 +466,14 @@ private fun InfoRow(
         if (actionLabel != null && onAction != null) {
             Text(
                 text = actionLabel,
-                color = if (onBlue) BlueKGTA else MaterialTheme.colorScheme.primary,
+                color = Color.White,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 12.sp,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(50))
+                    .background(actionPillBg(onBlue))
                     .clickable(onClick = onAction)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }
     }
@@ -469,8 +481,8 @@ private fun InfoRow(
 
 @Composable
 private fun IconBubble(icon: ImageVector, onBlue: Boolean) {
-    val bg = if (onBlue) BlueKGTA.copy(alpha = 0.1f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-    val tint = if (onBlue) BlueKGTA else MaterialTheme.colorScheme.primary
+    val tint = campusIconTint(onBlue)
+    val bg = tint.copy(alpha = if (onBlue) 0.12f else 0.18f)
     androidx.compose.foundation.layout.Box(
         modifier = Modifier
             .size(42.dp)
@@ -614,7 +626,7 @@ private fun ContactCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .background(BlueKGTA)
+                        .background(actionPillBg(onBlue))
                         .clickable { onWeb(item.webUri) }
                         .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
@@ -640,7 +652,7 @@ private fun ContactActionRow(
     val rowBg = if (onBlue) Color(0xFFE3EBF8) else Color(0xFF2E3D5C)
     val iconTint = if (onBlue) BlueKGTA else DarkOnSurfaceMuted
     val textColor = if (onBlue) Color(0xFF0F1F45) else Color.White
-    val btnBg = if (onBlue) BlueKGTA else BlueKGTALight
+    val btnBg = actionPillBg(onBlue)
     Row(
         modifier = Modifier
             .fillMaxWidth()

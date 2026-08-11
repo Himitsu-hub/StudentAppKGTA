@@ -18,6 +18,16 @@ struct CampusView: View {
     private var cardBody: Color { onBlue ? AppColors.textPrimary : AppColors.darkOnSurface }
     private var cardMuted: Color { onBlue ? AppColors.textSecondary : AppColors.darkOnSurfaceMuted }
     private var cardBg: Color { onBlue ? Color.white : AppColors.darkCard }
+    /// Icons: brand blue on light cards; soft light tint in dark (like phone/mail rows).
+    private var iconAccent: Color {
+        onBlue ? AppColors.blueKGTA : AppColors.darkOnSurfaceMuted
+    }
+    /// Capsule actions (Карта / Позвонить / …): lighter blue in light theme.
+    private var actionPillBg: Color {
+        onBlue
+            ? Color(red: 0x4A / 255, green: 0x7B / 255, blue: 0xC8 / 255)
+            : AppColors.blueKGTALight
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,7 +98,7 @@ struct CampusView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Image(systemName: "building.2")
-                    .foregroundStyle(AppColors.blueKGTA)
+                    .foregroundStyle(iconAccent)
                 Text(b.title)
                     .font(.headline)
                     .foregroundStyle(cardBody)
@@ -112,9 +122,9 @@ struct CampusView: View {
             HStack(spacing: 12) {
                 Image(systemName: "graduationcap.fill")
                     .font(.title2)
-                    .foregroundStyle(AppColors.blueKGTA)
+                    .foregroundStyle(iconAccent)
                     .frame(width: 44, height: 44)
-                    .background(AppColors.blueKGTA.opacity(0.12))
+                    .background(iconAccent.opacity(onBlue ? 0.12 : 0.18))
                     .clipShape(Circle())
                 VStack(alignment: .leading, spacing: 2) {
                     Text("КГТУ им. В.А. Дегтярева")
@@ -149,7 +159,7 @@ struct CampusView: View {
     private func infoRow(icon: String, label: String, action: String?, onAction: (() -> Void)?) -> some View {
         HStack(alignment: .center) {
             Image(systemName: icon)
-                .foregroundStyle(AppColors.blueKGTA)
+                .foregroundStyle(iconAccent)
                 .frame(width: 24)
             Text(label)
                 .font(.subheadline)
@@ -161,7 +171,7 @@ struct CampusView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(AppColors.blueKGTA)
+                    .background(actionPillBg)
                     .clipShape(Capsule())
             }
         }
@@ -201,7 +211,7 @@ struct CampusView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(AppColors.blueKGTA)
+                        .background(actionPillBg)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
@@ -224,7 +234,7 @@ struct CampusView: View {
             : Color(red: 0x2E / 255, green: 0x3D / 255, blue: 0x5C / 255)
         let iconColor = onBlue ? AppColors.blueKGTA : AppColors.darkOnSurfaceMuted
         let textColor = onBlue ? AppColors.blueKGTADark : Color.white
-        let btnBg = onBlue ? AppColors.blueKGTA : AppColors.blueKGTALight
+        let btnBg = actionPillBg
         return HStack(spacing: 10) {
             Image(systemName: icon)
                 .foregroundStyle(iconColor)
