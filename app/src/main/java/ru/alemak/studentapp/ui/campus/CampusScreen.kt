@@ -26,7 +26,6 @@ import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Schedule
@@ -54,8 +53,6 @@ import ru.alemak.studentapp.ui.theme.BlueKGTA
 import ru.alemak.studentapp.ui.theme.BlueKGTALight
 import ru.alemak.studentapp.ui.theme.DarkButtonBorder
 import ru.alemak.studentapp.ui.theme.DarkCard
-import ru.alemak.studentapp.ui.theme.DarkNavy
-import ru.alemak.studentapp.ui.theme.DarkOnSurface
 import ru.alemak.studentapp.ui.theme.DarkOnSurfaceMuted
 
 /**
@@ -74,7 +71,6 @@ private const val WORK_HOURS = "Пн–Пт, 8:00–17:00"
 private data class CampusBuilding(
     val title: String,
     val subtitle: String,
-    val note: String,
 )
 
 private data class ContactItem(
@@ -90,22 +86,18 @@ private val buildings = listOf(
     CampusBuilding(
         title = "Главный корпус",
         subtitle = "Учебные аудитории, деканаты, ректорат",
-        note = "Карты этажей с аудиториями — скоро",
     ),
     CampusBuilding(
         title = "Корпус лабораторий",
         subtitle = "Лаб. занятия, кафедры",
-        note = "Схемы этажей — в следующей версии",
     ),
     CampusBuilding(
         title = "Спортивный комплекс",
         subtitle = "Физкультура, секции",
-        note = "Как пройти — добавим на карте",
     ),
     CampusBuilding(
         title = "Общежитие / столовая",
         subtitle = "Быт и питание",
-        note = "Точки на карте кампуса — позже",
     ),
 )
 
@@ -249,10 +241,10 @@ fun CampusScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 28.dp),
         ) {
-            // ── Campus / maps first ──
-            SectionTitle("Корпуса и карты", titleColor)
+            // ── Campus buildings ──
+            SectionTitle("Корпуса", titleColor)
             Text(
-                text = "Планы этажей с аудиториями и преподавателями — здесь. Схемы добавим, когда будут чертежи.",
+                text = "Основные здания кампуса КГТУ",
                 color = hintColor,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
@@ -533,21 +525,6 @@ private fun BuildingCard(building: CampusBuilding, onBlue: Boolean) {
                     color = if (onBlue) Color(0xFF5F6B7A) else scheme.onSurfaceVariant,
                     fontSize = 13.sp,
                 )
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Outlined.Map,
-                        contentDescription = null,
-                        tint = if (onBlue) Color.Gray else scheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = building.note,
-                        color = if (onBlue) Color.Gray else scheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                    )
-                }
             }
         }
     }
@@ -598,7 +575,6 @@ private fun ContactCard(
                 Text(text = it, color = muted, fontSize = 12.sp)
             }
 
-            // Dark navy action rows — same look as iOS Campus
             if (item.phone != null) {
                 Spacer(Modifier.height(10.dp))
                 ContactActionRow(
@@ -606,6 +582,7 @@ private fun ContactCard(
                     text = item.phone,
                     button = "Позвонить",
                     onClick = onCall,
+                    onBlue = onBlue,
                 )
             }
             if (item.email != null) {
@@ -615,6 +592,7 @@ private fun ContactCard(
                     text = item.email,
                     button = "Написать",
                     onClick = { onEmail(item.email) },
+                    onBlue = onBlue,
                 )
             }
             if (item.webUri != null && item.phone == null && item.email == null) {
@@ -624,6 +602,7 @@ private fun ContactCard(
                     text = "Все контакты на сайте",
                     button = "Открыть",
                     onClick = { onWeb(item.webUri) },
+                    onBlue = onBlue,
                 )
             } else if (item.webUri != null) {
                 Spacer(Modifier.height(8.dp))
@@ -645,19 +624,28 @@ private fun ContactCard(
     }
 }
 
-/** Dark navy chip with light text + action button (matches iOS). */
+/**
+ * Phone/email chips:
+ * - light theme: soft blue row + dark blue text
+ * - dark theme: lighter navy row + pure white text
+ */
 @Composable
 private fun ContactActionRow(
     icon: ImageVector,
     text: String,
     button: String,
     onClick: () -> Unit,
+    onBlue: Boolean,
 ) {
+    val rowBg = if (onBlue) Color(0xFFE3EBF8) else Color(0xFF2E3D5C)
+    val iconTint = if (onBlue) BlueKGTA else DarkOnSurfaceMuted
+    val textColor = if (onBlue) Color(0xFF0F1F45) else Color.White
+    val btnBg = if (onBlue) BlueKGTA else BlueKGTALight
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(DarkNavy)
+            .background(rowBg)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -665,15 +653,15 @@ private fun ContactActionRow(
         Icon(
             icon,
             contentDescription = null,
-            tint = DarkOnSurfaceMuted,
+            tint = iconTint,
             modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(10.dp))
         Text(
             text = text,
-            color = DarkOnSurface,
+            color = textColor,
             fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f),
             maxLines = 2,
         )
@@ -685,7 +673,7 @@ private fun ContactActionRow(
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .background(BlueKGTALight)
+                .background(btnBg)
                 .padding(horizontal = 10.dp, vertical = 6.dp),
         )
     }

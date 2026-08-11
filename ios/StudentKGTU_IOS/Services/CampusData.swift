@@ -4,7 +4,6 @@ struct CampusBuilding: Identifiable {
     let id = UUID()
     let title: String
     let subtitle: String
-    let note: String
 }
 
 struct ContactItem: Identifiable {
@@ -27,10 +26,10 @@ enum CampusData {
     static let workHours = "Пн–Пт, 8:00–17:00"
 
     static let buildings: [CampusBuilding] = [
-        .init(title: "Главный корпус", subtitle: "Учебные аудитории, деканаты, ректорат", note: "Карты этажей с аудиториями — скоро"),
-        .init(title: "Корпус лабораторий", subtitle: "Лаб. занятия, кафедры", note: "Схемы этажей — в следующей версии"),
-        .init(title: "Спортивный комплекс", subtitle: "Физкультура, секции", note: "Как пройти — добавим на карте"),
-        .init(title: "Общежитие / столовая", subtitle: "Быт и питание", note: "Точки на карте кампуса — позже"),
+        .init(title: "Главный корпус", subtitle: "Учебные аудитории, деканаты, ректорат"),
+        .init(title: "Корпус лабораторий", subtitle: "Лаб. занятия, кафедры"),
+        .init(title: "Спортивный комплекс", subtitle: "Физкультура, секции"),
+        .init(title: "Общежитие / столовая", subtitle: "Быт и питание"),
     ]
 
     static let quickContacts: [ContactItem] = [

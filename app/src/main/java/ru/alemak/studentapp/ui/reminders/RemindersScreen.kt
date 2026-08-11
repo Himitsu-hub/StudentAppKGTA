@@ -7,6 +7,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,7 +31,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -72,11 +74,15 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.delay
 import ru.alemak.studentapp.data.model.Reminder
 import ru.alemak.studentapp.ui.components.AppTopBar
 import ru.alemak.studentapp.ui.components.EmptyState
 import ru.alemak.studentapp.ui.components.swipeBack
 import ru.alemak.studentapp.ui.theme.BlueKGTA
+import ru.alemak.studentapp.ui.theme.DarkButton
+import ru.alemak.studentapp.ui.theme.DarkNavy
+import ru.alemak.studentapp.ui.theme.SuccessGreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,7 +96,15 @@ fun RemindersScreen(
     val scheme = MaterialTheme.colorScheme
 
     var editor by remember { mutableStateOf<Reminder?>(null) }
-    var completeCandidate by remember { mutableStateOf<Reminder?>(null) }
+    var completingIds by remember { mutableStateOf(setOf<String>()) }
+
+    fun markComplete(id: String) {
+        completingIds = completingIds + id
+    }
+
+    fun undoComplete(id: String) {
+        completingIds = completingIds - id
+    }
 
     fun checkNotificationPermission(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
@@ -173,8 +187,19 @@ fun RemindersScreen(
                     items(reminders, key = { it.id }) { reminder ->
                         ReminderRow(
                             reminder = reminder,
+                            isCompleting = reminder.id in completingIds,
                             onEdit = { editor = reminder },
-                            onComplete = { completeCandidate = reminder },
+                            onToggleComplete = {
+                                if (reminder.id in completingIds) {
+                                    undoComplete(reminder.id)
+                                } else {
+                                    markComplete(reminder.id)
+                                }
+                            },
+                            onAutoDelete = {
+                                viewModel.delete(reminder)
+                                undoComplete(reminder.id)
+                            },
                         )
                     }
                     item { Spacer(Modifier.height(72.dp)) }
@@ -191,36 +216,6 @@ fun RemindersScreen(
                 viewModel.save(reminder.id, text, millis)
                 editor = null
             },
-        )
-    }
-
-    completeCandidate?.let { reminder ->
-        AlertDialog(
-            onDismissRequest = { completeCandidate = null },
-            title = { Text("Завершить напоминание?", color = scheme.onSurface) },
-            text = { Text("Удалить «${reminder.text}»?", color = scheme.onSurfaceVariant) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.delete(reminder)
-                        completeCandidate = null
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = scheme.primary,
-                        contentColor = scheme.onPrimary,
-                    ),
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Да")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { completeCandidate = null }) {
-                    Text("Отмена", color = scheme.primary)
-                }
-            },
-            containerColor = scheme.surface,
         )
     }
 }
@@ -260,40 +255,69 @@ private fun PermissionCard(onRequest: () -> Unit) {
 @Composable
 private fun ReminderRow(
     reminder: Reminder,
+    isCompleting: Boolean,
     onEdit: () -> Unit,
-    onComplete: () -> Unit,
+    onToggleComplete: () -> Unit,
+    onAutoDelete: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val formatter = remember {
         SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     }
+    val alpha by animateFloatAsState(if (isCompleting) 0.55f else 1f, label = "rowAlpha")
+    val circleColor = if (isCompleting) SuccessGreen else scheme.outline
+
+    LaunchedEffect(isCompleting, reminder.id) {
+        if (isCompleting) {
+            delay(2000)
+            onAutoDelete()
+        }
+    }
+
     Surface(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onEdit),
+            .fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = scheme.surface,
+        color = scheme.surface.copy(alpha = alpha),
         shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, scheme.outline.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, scheme.outline.copy(alpha = 0.35f * alpha)),
     ) {
         Row(
-            Modifier.padding(16.dp),
+            Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(26.dp)
                     .clip(CircleShape)
-                    .border(2.dp, scheme.outline, CircleShape)
-                    .clickable(onClick = onComplete),
-            )
+                    .border(2.dp, circleColor, CircleShape)
+                    .background(if (isCompleting) SuccessGreen else Color.Transparent)
+                    .clickable(onClick = onToggleComplete),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isCompleting) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Выполнено",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
             Spacer(Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onEdit),
+            ) {
                 Text(
                     reminder.text,
                     fontWeight = FontWeight.Medium,
                     fontSize = 16.sp,
-                    color = scheme.onSurface,
+                    color = if (isCompleting) scheme.onSurfaceVariant else scheme.onSurface,
+                    textDecoration = if (isCompleting) TextDecoration.LineThrough else null,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -314,6 +338,7 @@ private fun ReminderEditorDialog(
 ) {
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
+    val isLightBrand = scheme.background == BlueKGTA
     val isEditing = reminder.text.isNotBlank()
     var text by remember { mutableStateOf(reminder.text) }
 
@@ -326,14 +351,22 @@ private fun ReminderEditorDialog(
     var hour by remember { mutableIntStateOf(calendar.get(Calendar.HOUR_OF_DAY)) }
     var minute by remember { mutableIntStateOf(calendar.get(Calendar.MINUTE)) }
 
+    // Dark navy dialog + pure white action labels (readable in dark theme)
+    val dialogBg = if (isLightBrand) Color.White else DarkNavy
+    val fieldBg = if (isLightBrand) Color(0xFFF0F3F8) else DarkButton
+    val titleColor = if (isLightBrand) Color(0xFF1A1A1A) else Color.White
+    val bodyColor = if (isLightBrand) Color(0xFF1A1A1A) else Color.White
+    val mutedColor = if (isLightBrand) Color(0xFF5F6B7A) else Color(0xFFA8B2C4)
+    val actionWhite = Color.White
+
     Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), color = scheme.surface) {
+        Surface(shape = RoundedCornerShape(16.dp), color = dialogBg) {
             Column(modifier = Modifier.padding(16.dp).width(320.dp)) {
                 Text(
                     if (isEditing) "Редактировать" else "Новое напоминание",
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp,
-                    color = scheme.onSurface,
+                    color = titleColor,
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
@@ -343,18 +376,18 @@ private fun ReminderEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = scheme.onSurface,
-                        unfocusedTextColor = scheme.onSurface,
-                        disabledTextColor = scheme.onSurfaceVariant,
-                        cursorColor = scheme.primary,
-                        focusedLabelColor = scheme.primary,
-                        unfocusedLabelColor = scheme.onSurfaceVariant,
-                        focusedBorderColor = scheme.primary,
-                        unfocusedBorderColor = scheme.outline,
+                        focusedTextColor = bodyColor,
+                        unfocusedTextColor = bodyColor,
+                        disabledTextColor = mutedColor,
+                        cursorColor = if (isLightBrand) BlueKGTA else Color.White,
+                        focusedLabelColor = if (isLightBrand) BlueKGTA else Color.White,
+                        unfocusedLabelColor = mutedColor,
+                        focusedBorderColor = if (isLightBrand) BlueKGTA else Color.White,
+                        unfocusedBorderColor = mutedColor,
                     ),
                 )
                 Spacer(Modifier.height(12.dp))
-                Text("Дата и время", fontWeight = FontWeight.Medium, color = scheme.onSurface)
+                Text("Дата и время", fontWeight = FontWeight.Medium, color = bodyColor)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(
@@ -375,8 +408,8 @@ private fun ReminderEditorDialog(
                                 ).show()
                             },
                         shape = RoundedCornerShape(8.dp),
-                        color = scheme.surfaceVariant,
-                        border = BorderStroke(1.dp, scheme.outline),
+                        color = fieldBg,
+                        border = BorderStroke(1.dp, mutedColor.copy(alpha = 0.5f)),
                     ) {
                         Box(
                             Modifier.fillMaxSize().padding(start = 12.dp),
@@ -384,7 +417,7 @@ private fun ReminderEditorDialog(
                         ) {
                             Text(
                                 "%02d.%02d.%04d".format(day, month + 1, year),
-                                color = scheme.onSurface,
+                                color = bodyColor,
                             )
                         }
                     }
@@ -405,8 +438,8 @@ private fun ReminderEditorDialog(
                                 ).show()
                             },
                         shape = RoundedCornerShape(8.dp),
-                        color = scheme.surfaceVariant,
-                        border = BorderStroke(1.dp, scheme.outline),
+                        color = fieldBg,
+                        border = BorderStroke(1.dp, mutedColor.copy(alpha = 0.5f)),
                     ) {
                         Box(
                             Modifier.fillMaxSize().padding(start = 12.dp),
@@ -414,7 +447,7 @@ private fun ReminderEditorDialog(
                         ) {
                             Text(
                                 "%02d:%02d".format(hour, minute),
-                                color = scheme.onSurface,
+                                color = bodyColor,
                             )
                         }
                     }
@@ -422,7 +455,11 @@ private fun ReminderEditorDialog(
                 Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) {
-                        Text("Отмена", color = scheme.primary)
+                        Text(
+                            "Отмена",
+                            color = if (isLightBrand) BlueKGTA else actionWhite,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(
@@ -443,11 +480,17 @@ private fun ReminderEditorDialog(
                         },
                         enabled = text.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = scheme.primary,
-                            contentColor = scheme.onPrimary,
+                            containerColor = if (isLightBrand) BlueKGTA else Color(0xFF3A5A8C),
+                            contentColor = Color.White,
+                            disabledContainerColor = if (isLightBrand) Color(0xFFCCD5E0) else Color(0xFF243049),
+                            disabledContentColor = if (isLightBrand) Color(0xFF5F6B7A) else Color(0xFF6A7A94),
                         ),
                     ) {
-                        Text(if (isEditing) "Сохранить" else "Добавить")
+                        Text(
+                            if (isEditing) "Сохранить" else "Добавить",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
                     }
                 }
             }

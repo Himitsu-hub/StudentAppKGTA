@@ -25,8 +25,8 @@ struct CampusView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    sectionTitle("Корпуса и карты")
-                    Text("Планы этажей с аудиториями и преподавателями — здесь. Схемы добавим, когда будут чертежи.")
+                    sectionTitle("Корпуса")
+                    Text("Основные здания кампуса КГТУ")
                         .font(.system(size: 13))
                         .foregroundStyle(screenHint)
                         .fixedSize(horizontal: false, vertical: true)
@@ -96,9 +96,6 @@ struct CampusView: View {
             Text(b.subtitle)
                 .font(.subheadline)
                 .foregroundStyle(cardMuted)
-            Text(b.note)
-                .font(.caption)
-                .foregroundStyle(AppColors.offlineAmber)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -220,14 +217,20 @@ struct CampusView: View {
         )
     }
 
-    /// Dark navy chips for phone/email — readable on white contact cards.
+    /// Phone/email chips: soft blue in light theme, lighter navy in dark.
     private func contactActionRow(icon: String, text: String, button: String, action: @escaping () -> Void) -> some View {
-        HStack(spacing: 10) {
+        let rowBg = onBlue
+            ? Color(red: 0xE3 / 255, green: 0xEB / 255, blue: 0xF8 / 255)
+            : Color(red: 0x2E / 255, green: 0x3D / 255, blue: 0x5C / 255)
+        let iconColor = onBlue ? AppColors.blueKGTA : AppColors.darkOnSurfaceMuted
+        let textColor = onBlue ? AppColors.blueKGTADark : Color.white
+        let btnBg = onBlue ? AppColors.blueKGTA : AppColors.blueKGTALight
+        return HStack(spacing: 10) {
             Image(systemName: icon)
-                .foregroundStyle(AppColors.darkOnSurfaceMuted)
+                .foregroundStyle(iconColor)
             Text(text)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(AppColors.darkOnSurface)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(textColor)
                 .lineLimit(2)
             Spacer(minLength: 4)
             Button(button, action: action)
@@ -235,15 +238,15 @@ struct CampusView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(AppColors.blueKGTALight)
+                .background(btnBg)
                 .clipShape(Capsule())
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(AppColors.darkNavy)
+        .background(rowBg)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(AppColors.darkButtonBorder, lineWidth: 1)
+                .stroke(onBlue ? AppColors.blueKGTA.opacity(0.2) : AppColors.darkButtonBorder, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
