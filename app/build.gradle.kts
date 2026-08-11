@@ -14,8 +14,8 @@ android {
         applicationId = "ru.alemak.studentapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 60
-        versionName = "2.3.35"
+        versionCode = 61
+        versionName = "2.3.36"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

@@ -110,15 +110,17 @@ struct ScheduleView: View {
         }
     }
 
-    /// High-contrast picker: navy background, white labels (readable in dark theme).
+    /// High-contrast picker: navy sheet + pure white labels (never muted system blue).
     private func schedulePickerSheet(
         title: String,
         labels: [String],
         onPick: @escaping (Int) -> Void
     ) -> some View {
-        NavigationStack {
+        // Slightly lighter than darkButton so white text is clearly readable.
+        let rowBg = Color(red: 0x2E / 255, green: 0x3D / 255, blue: 0x5C / 255)
+        return NavigationStack {
             ScrollView {
-                VStack(spacing: 10) {
+                VStack(spacing: 12) {
                     ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
                         Button {
                             onPick(index)
@@ -127,13 +129,17 @@ struct ScheduleView: View {
                             showSubgroup = false
                         } label: {
                             Text(label)
-                                .font(.body.weight(.semibold))
+                                .font(.body.weight(.bold))
                                 .foregroundStyle(Color.white)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
-                                .background(AppColors.darkButton)
+                                .padding(.vertical, 18)
+                                .background(rowBg)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(AppColors.darkButtonBorder, lineWidth: 1)
+                                )
                         }
                         .buttonStyle(.plain)
                     }
@@ -141,17 +147,20 @@ struct ScheduleView: View {
                 .padding(16)
             }
             .background(AppColors.darkNavy.ignoresSafeArea())
-            .navigationTitle(title)
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(title)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(Color.white)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") {
                         showCourse = false
                         showGroup = false
                         showSubgroup = false
                     }
+                    .fontWeight(.semibold)
                     .foregroundStyle(Color.white)
                 }
             }
@@ -159,8 +168,10 @@ struct ScheduleView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
         }
+        .preferredColorScheme(.dark)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .presentationBackground(AppColors.darkNavy)
     }
 
     private func selectionChip(_ text: String, action: @escaping () -> Void) -> some View {

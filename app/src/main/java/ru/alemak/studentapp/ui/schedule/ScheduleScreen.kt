@@ -232,31 +232,42 @@ private fun <T> SimpleListDialog(
 ) {
     val scheme = MaterialTheme.colorScheme
     val isLightBrand = scheme.background == BlueKGTA
-    // High contrast: dark navy dialog + white labels (readable in dark theme)
+    // Always high-contrast: pure white labels in dark theme (never muted blue).
     val dialogBg = if (isLightBrand) Color.White else DarkNavy
-    val itemBg = if (isLightBrand) Color(0xFFF0F3F8) else DarkButton
+    // Slightly lighter row than navy so white text pops.
+    val itemBg = if (isLightBrand) Color(0xFFF0F3F8) else Color(0xFF2E3D5C)
     val titleColor = if (isLightBrand) Color(0xFF1A1A1A) else Color.White
     val itemText = if (isLightBrand) Color(0xFF1A1A1A) else Color.White
     val cancelColor = if (isLightBrand) BlueKGTA else Color.White
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontWeight = FontWeight.Bold, color = titleColor) },
+        title = {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                color = titleColor,
+                style = MaterialTheme.typography.titleLarge,
+            )
+        },
         text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(items, key = { it.first }) { (label, value) ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelect(value) },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = CardDefaults.cardColors(containerColor = itemBg),
-                        elevation = CardDefaults.cardElevation(1.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = itemBg,
+                            contentColor = itemText,
+                        ),
+                        elevation = CardDefaults.cardElevation(2.dp),
                     ) {
                         Text(
                             text = label,
                             color = itemText,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     }
@@ -265,10 +276,12 @@ private fun <T> SimpleListDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена", color = cancelColor, fontWeight = FontWeight.SemiBold)
+                Text("Отмена", color = cancelColor, fontWeight = FontWeight.Bold)
             }
         },
         containerColor = dialogBg,
+        titleContentColor = titleColor,
+        textContentColor = itemText,
     )
 }
 
