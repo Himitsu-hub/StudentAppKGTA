@@ -22,6 +22,7 @@ class StudentApp : Application() {
         ThemePrefs.applyNightModeFromPrefs(this)
         createReminderChannel()
         createScheduleUpdatesChannel()
+        createNewsUpdatesChannel()
         ScheduleUpdateScheduler.schedule(this)
     }
 
@@ -53,8 +54,23 @@ class StudentApp : Application() {
         manager.createNotificationChannel(channel)
     }
 
+    private fun createNewsUpdatesChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        val channel = NotificationChannel(
+            NEWS_UPDATES_CHANNEL_ID,
+            "Новости КГТУ",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Когда на сайте вуза появляется новая новость"
+            enableVibration(true)
+        }
+        manager.createNotificationChannel(channel)
+    }
+
     companion object {
         const val REMINDERS_CHANNEL_ID = "reminders"
         const val SCHEDULE_UPDATES_CHANNEL_ID = "schedule_updates"
+        const val NEWS_UPDATES_CHANNEL_ID = "news_updates"
     }
 }

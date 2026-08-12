@@ -172,11 +172,13 @@ fun HomeScreen(
                     CircularProgressIndicator(color = onHome, modifier = Modifier.size(20.dp))
                 }
                 state.isVacation -> {
+                    // «Каникулы» already in weekType header — subtitle only (no double title).
                     NextLessonBlock(
                         lesson = null,
                         darkTheme = darkTheme,
-                        vacationTitle = state.vacationTitle ?: "Каникулы",
-                        vacationSubtitle = state.vacationSubtitle ?: "Занятия с 1 сентября",
+                        vacationTitle = null,
+                        vacationSubtitle = state.vacationSubtitle
+                            ?: "Лето · занятия с 1 сентября",
                     )
                 }
                 !state.hasGroup -> {
@@ -260,16 +262,18 @@ private fun NextLessonBlock(
     val primary = if (darkTheme) DarkOnSurface else Color.White
     val muted = if (darkTheme) DarkOnSurfaceMuted else Color.White.copy(alpha = 0.75f)
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        if (vacationTitle != null) {
-            Text(
-                text = vacationTitle,
-                color = primary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp,
-                textAlign = TextAlign.Center,
-            )
+        if (vacationTitle != null || vacationSubtitle != null) {
+            if (vacationTitle != null) {
+                Text(
+                    text = vacationTitle,
+                    color = primary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
             if (!vacationSubtitle.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
+                if (vacationTitle != null) Spacer(Modifier.height(4.dp))
                 Text(
                     text = vacationSubtitle,
                     color = muted,

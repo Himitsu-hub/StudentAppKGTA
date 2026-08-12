@@ -137,18 +137,24 @@ def ensure_course_indexed(db: Session, course: int, force: bool = False) -> None
         index_course_file(db, course)
 
 
-def _news_refresh_loop(interval_sec: int = 20 * 60) -> None:
-    """Background: re-scrape dksta.ru every 20 minutes so cache stays fresh."""
+def _news_refresh_loop(interval_sec: int = 5 * 60) -> None:
+    """Background: re-scrape dksta.ru often so new posts appear without redeploy."""
     import threading
     import time
 
     from news_scraper import scrape_news
 
     def worker() -> None:
+        # First loop after a short delay (startup already scrapes once)
+        time.sleep(30)
         while True:
             try:
                 n = scrape_news(20)
-                print(f"[news-loop] refreshed {len(n)} items")
+                top = n[0] if n else {}
+                print(
+                    f"[news-loop] refreshed {len(n)} items "
+                    f"top={top.get('date')} {str(top.get('title', ''))[:60]}"
+                )
             except Exception as exc:
                 print(f"[news-loop] error: {exc}")
             time.sleep(interval_sec)
@@ -171,14 +177,14 @@ def startup():
     finally:
         db.close()
 
-    # Warm news cache immediately + keep refreshing in background
+    # Warm news cache immediately + keep refreshing in background (~every 5 min)
     try:
         from news_scraper import scrape_news
 
         scrape_news(20)
     except Exception as exc:
         print(f"[news] startup scrape: {exc}")
-    _news_refresh_loop(20 * 60)
+    _news_refresh_loop(5 * 60)
 
 
 @app.get("/health")
@@ -227,17 +233,35 @@ def get_teachers():
 
 
 @app.get("/api/news")
-def get_news(limit: int = Query(15, ge=1, le=50)):
-    """Live scrape from dksta.ru; merges into news_cache.json (never stuck on old posts)."""
-    from news_scraper import load_cached_news, scrape_news
+def get_news(
+    limit: int = Query(15, ge=1, le=50),
+    force: bool = Query(False, description="Force live scrape even if cache is warm"),
+):
+    """
+    News from dksta.ru (merged cache).
+    Warm cache is returned instantly; background loop keeps it fresh every ~5 min.
+    Pass force=true to scrape on this request.
+    """
+    from news_scraper import get_news_fast, load_cached_news
 
-    # Prefer a fresh scrape; on failure still return whatever is in cache
     try:
-        news = scrape_news(limit)
+        news = get_news_fast(limit, force=force)
     except Exception as exc:
         print(f"[news] api scrape failed: {exc}")
         news = load_cached_news()[:limit]
     return {"news": news, "count": len(news)}
+
+
+@app.get("/api/news-updates")
+def news_updates():
+    """
+    Lightweight fingerprint of the news feed for client polling.
+    Apps poll this (e.g. every 10–15 min) and show a local notification
+    when fingerprint / version changes (new post on dksta.ru).
+    """
+    from news_scraper import news_updates_payload
+
+    return news_updates_payload()
 
 
 @app.get("/api/courses")

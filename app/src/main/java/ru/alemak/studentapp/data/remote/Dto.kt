@@ -103,3 +103,14 @@ data class CourseUpdateDto(
     val updatedAt: String? = null,
     val available: Boolean = false,
 )
+
+/** Lightweight news feed fingerprint for background poll + notifications. */
+data class NewsUpdatesDto(
+    val version: String = "",
+    val fingerprint: String = "",
+    val latestTitle: String = "",
+    val latestDate: String = "",
+    val latestUrl: String = "",
+    val count: Int = 0,
+    val updatedAt: Double? = null,
+)

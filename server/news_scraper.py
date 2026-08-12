@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import time
 from datetime import datetime
 from typing import Any
 from urllib.parse import urljoin
@@ -15,6 +17,10 @@ from bs4 import BeautifulSoup
 BASE_URL = "https://dksta.ru"
 NEWS_URL = f"{BASE_URL}/"
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "news_cache.json")
+META_PATH = os.path.join(os.path.dirname(__file__), "news_meta.json")
+
+# If cache is younger than this, /api/news can skip a live scrape.
+FRESH_SECONDS = 90
 
 HEADERS = {
     "User-Agent": (
@@ -23,6 +29,8 @@ HEADERS = {
     ),
     "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
 
 
@@ -55,7 +63,6 @@ def _clean_title(title: str, date: str) -> str:
     title = (title or "").strip()
     if date and date in title:
         title = title.replace(date, "").strip(" ·|-–—")
-    # Drop trailing date-like noise
     title = re.sub(r"\s+\d{2}\.\d{2}\.\d{4}\s*$", "", title).strip()
     return title
 
@@ -86,6 +93,11 @@ def _parse_news_wrap(soup: BeautifulSoup) -> list[dict[str, Any]]:
             continue
 
         title = link_tag.get_text(" ", strip=True)
+        if not title or title.isdigit():
+            # Sometimes the visible title is outside the <a>
+            heading = div.find(["h2", "h3", "h4", "strong"])
+            if heading:
+                title = heading.get_text(" ", strip=True)
         if not title or title.isdigit():
             continue
 
@@ -122,14 +134,18 @@ def _parse_news_wrap(soup: BeautifulSoup) -> list[dict[str, Any]]:
     return scraped
 
 
-def _fetch_soup(url: str) -> BeautifulSoup | None:
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=25)
-        resp.raise_for_status()
-        return BeautifulSoup(resp.text, "html.parser")
-    except Exception as exc:
-        print(f"[news] fetch failed {url}: {exc}")
-        return None
+def _fetch_soup(url: str, timeout: int = 20) -> BeautifulSoup | None:
+    last_err: Exception | None = None
+    for attempt in range(3):
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=timeout)
+            resp.raise_for_status()
+            return BeautifulSoup(resp.text, "html.parser")
+        except Exception as exc:
+            last_err = exc
+            time.sleep(0.6 * (attempt + 1))
+    print(f"[news] fetch failed {url}: {last_err}")
+    return None
 
 
 def _merge_news(scraped: list[dict[str, Any]], cached: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -146,19 +162,71 @@ def _merge_news(scraped: list[dict[str, Any]], cached: list[dict[str, Any]]) -> 
     return _sorted(list(by_url.values()))
 
 
+def fingerprint_for(news: list[dict[str, Any]]) -> str:
+    """Stable id of the current top of the feed (for client poll + notifications)."""
+    top = news[:5]
+    raw = "|".join(
+        f"{(i.get('url') or '').strip()}::{(i.get('date') or '').strip()}" for i in top
+    )
+    if not raw:
+        return ""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def load_meta() -> dict[str, Any]:
+    if not os.path.exists(META_PATH):
+        return {}
+    try:
+        with open(META_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_meta(news: list[dict[str, Any]]) -> dict[str, Any]:
+    top = news[0] if news else {}
+    meta = {
+        "last_scrape_ts": time.time(),
+        "fingerprint": fingerprint_for(news),
+        "latest_url": top.get("url") or "",
+        "latest_title": top.get("title") or "",
+        "latest_date": top.get("date") or "",
+        "count": len(news),
+    }
+    try:
+        with open(META_PATH, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        print(f"[news] meta save failed: {exc}")
+    return meta
+
+
+def cache_age_seconds() -> float:
+    meta = load_meta()
+    ts = float(meta.get("last_scrape_ts") or 0)
+    if ts <= 0 and os.path.exists(CACHE_PATH):
+        try:
+            return max(0.0, time.time() - os.path.getmtime(CACHE_PATH))
+        except OSError:
+            return 1e9
+    if ts <= 0:
+        return 1e9
+    return max(0.0, time.time() - ts)
+
+
 def scrape_news(limit: int = 15) -> list[dict[str, Any]]:
     """
     Return freshest news.
-    Scrapes homepage + a few listing pages, merges into cache so VPS
-    partial scrapes never wipe newer posts permanently.
+    Scrapes homepage + listing pages, merges into cache so partial scrapes
+    never wipe newer posts permanently.
     """
     cached = load_cached_news()
     scraped: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    # Homepage first, then paginated lists (site uses novosti/p/N)
     page_urls = [NEWS_URL] + [
-        urljoin(BASE_URL + "/", f"novosti/p/{i}") for i in range(1, 4)
+        urljoin(BASE_URL + "/", f"novosti/p/{i}") for i in range(1, 5)
     ]
 
     for page_url in page_urls:
@@ -170,19 +238,66 @@ def scrape_news(limit: int = 15) -> list[dict[str, Any]]:
             if u and u not in seen:
                 seen.add(u)
                 scraped.append(item)
-        if len(scraped) >= max(limit, 12):
+        if len(scraped) >= max(limit, 15):
             break
 
     if not scraped:
         print("[news] scrape empty, using cache")
+        # Still refresh meta timestamp so clients know we tried
+        if cached:
+            save_meta(cached)
         return _sorted(cached)[:limit]
 
     merged = _merge_news(scraped, cached)
-    # Keep a reasonable history for clients
     merged = merged[:80]
     save_news_cache(merged)
-    print(f"[news] scraped={len(scraped)} merged={len(merged)} -> return {min(limit, len(merged))}")
+    save_meta(merged)
+    print(
+        f"[news] scraped={len(scraped)} merged={len(merged)} "
+        f"-> return {min(limit, len(merged))} top={merged[0].get('date')} {merged[0].get('title', '')[:50]}"
+    )
     return merged[:limit]
+
+
+def get_news_fast(limit: int = 15, force: bool = False) -> list[dict[str, Any]]:
+    """
+    Prefer warm cache if recently scraped; otherwise live scrape.
+    Keeps /api/news responsive while background loop keeps data fresh.
+    """
+    cached = load_cached_news()
+    if not force and cached and cache_age_seconds() < FRESH_SECONDS:
+        return _sorted(cached)[:limit]
+    try:
+        return scrape_news(limit)
+    except Exception as exc:
+        print(f"[news] get_news_fast scrape failed: {exc}")
+        return _sorted(cached)[:limit]
+
+
+def news_updates_payload() -> dict[str, Any]:
+    """Lightweight poll payload for clients (push-style local notifications)."""
+    news = load_cached_news()
+    meta = load_meta()
+    # If meta missing or cache empty, try a scrape
+    if not news or not meta.get("fingerprint"):
+        try:
+            news = scrape_news(10)
+            meta = load_meta()
+        except Exception as exc:
+            print(f"[news] news_updates scrape failed: {exc}")
+            news = load_cached_news()
+            meta = load_meta()
+    top = news[0] if news else {}
+    fp = meta.get("fingerprint") or fingerprint_for(news)
+    return {
+        "version": fp or (top.get("url") or ""),
+        "fingerprint": fp or "",
+        "latestTitle": meta.get("latest_title") or top.get("title") or "",
+        "latestDate": meta.get("latest_date") or top.get("date") or "",
+        "latestUrl": meta.get("latest_url") or top.get("url") or "",
+        "count": len(news),
+        "updatedAt": meta.get("last_scrape_ts"),
+    }
 
 
 def _sorted(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -209,3 +324,4 @@ if __name__ == "__main__":
     for i, item in enumerate(scrape_news(10), 1):
         print(f"{i}. {item['title']} ({item.get('date', '')})")
         print(f"   {item['url']}")
+    print("updates:", news_updates_payload())

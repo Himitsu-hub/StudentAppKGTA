@@ -50,11 +50,15 @@ fi
 if [[ -f "$D/teachers.json" ]]; then
   scp "$D/teachers.json" "$S:$REMOTE_DIR/"
 fi
-# Ship fresh news cache from Mac so VPS is not stuck on old July posts
+# Ship fresh news cache + meta from Mac so VPS is not stuck on old posts
 # (VPS sometimes fails to scrape dksta.ru and kept a stale news_cache.json)
 if [[ -f "$D/news_cache.json" ]]; then
   scp "$D/news_cache.json" "$S:$REMOTE_DIR/"
   echo "   news_cache.json copied (fresh scrape from deploy machine)"
+fi
+if [[ -f "$D/news_meta.json" ]]; then
+  scp "$D/news_meta.json" "$S:$REMOTE_DIR/"
+  echo "   news_meta.json copied"
 fi
 
 echo "3/6 Writing remote .env..."

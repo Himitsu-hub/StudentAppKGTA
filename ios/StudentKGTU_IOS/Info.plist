@@ -9,6 +9,7 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>Univers.StudentKGTU-IOS.schedule-update</string>
+		<string>Univers.StudentKGTU-IOS.news-update</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>

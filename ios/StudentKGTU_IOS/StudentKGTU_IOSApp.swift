@@ -12,6 +12,7 @@ struct StudentKGTU_IOSApp: App {
         // Start path monitor early for offline-first loads
         _ = NetworkMonitor.shared
         ScheduleUpdateChecker.registerBackgroundTask()
+        NewsUpdateChecker.registerBackgroundTask()
     }
 
     var body: some Scene {
@@ -23,7 +24,9 @@ struct StudentKGTU_IOSApp: App {
                 .environmentObject(scheduleCache)
                 .task {
                     ScheduleUpdateChecker.scheduleNextBackground()
+                    NewsUpdateChecker.scheduleNextBackground()
                     await ScheduleUpdateChecker.check(notify: true)
+                    await NewsUpdateChecker.check(notify: true)
                     await WidgetUpdater.updateNow()
                 }
         }

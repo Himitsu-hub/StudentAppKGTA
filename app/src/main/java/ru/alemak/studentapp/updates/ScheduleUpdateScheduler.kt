@@ -27,6 +27,10 @@ object ScheduleUpdateScheduler {
                 ScheduleUpdateChecker.check(app, notify = true)
             } catch (_: Exception) {
             }
+            try {
+                NewsUpdateChecker.check(app, notify = true)
+            } catch (_: Exception) {
+            }
             scheduleNext(app)
         }
     }

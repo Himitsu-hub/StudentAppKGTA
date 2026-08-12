@@ -108,15 +108,16 @@ struct HomeView: View {
             guard !didInitialLoad else { return }
             didInitialLoad = true
             await refresh(showLoading: true)
-            // Poll news every 15 minutes while home is alive
+            // Poll news every 5 minutes while home is open + check for new-post notifications
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 15 * 60 * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 5 * 60 * 1_000_000_000)
                 if NetworkMonitor.shared.isOnline {
                     let meta = await loadNews()
                     if meta.updatedAt > 0 {
                         updatedLabel = TimeFormat.updatedAtLabel(millis: meta.updatedAt) ?? updatedLabel
                     }
                     usingCached = meta.fromCache ? true : usingCached
+                    _ = await NewsUpdateChecker.check(notify: true)
                 }
             }
         }
@@ -131,18 +132,13 @@ struct HomeView: View {
         }
     }
 
+    /// Subtitle only — «Каникулы» already shown once in the week header line.
     private var vacationBlock: some View {
-        VStack(spacing: 4) {
-            Text("Каникулы")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(onHome)
-                .multilineTextAlignment(.center)
-            Text("Лето · занятия с 1 сентября")
-                .font(.system(size: 15))
-                .foregroundStyle(onHomeMuted)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
+        Text("Лето · занятия с 1 сентября")
+            .font(.system(size: 15))
+            .foregroundStyle(onHomeMuted)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
     }
 
     private var nextLessonBlock: some View {

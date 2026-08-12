@@ -80,6 +80,13 @@ class UserPreferences @Inject constructor(
         }
     }
 
+    suspend fun getNewsVersion(): String =
+        store.data.map { it[Keys.NEWS_VERSION].orEmpty() }.first()
+
+    suspend fun setNewsVersion(version: String) {
+        store.edit { prefs -> prefs[Keys.NEWS_VERSION] = version }
+    }
+
     private fun scheduleVersionKey(course: Int) =
         stringPreferencesKey("schedule_version_$course")
 
@@ -89,5 +96,6 @@ class UserPreferences @Inject constructor(
         val SUBGROUP = stringPreferencesKey("selected_subgroup")
         val DARK_THEME = booleanPreferencesKey("dark_theme")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+        val NEWS_VERSION = stringPreferencesKey("news_feed_version")
     }
 }

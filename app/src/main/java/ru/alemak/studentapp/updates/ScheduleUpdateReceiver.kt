@@ -19,6 +19,7 @@ class ScheduleUpdateReceiver : BroadcastReceiver() {
         scope.launch {
             try {
                 ScheduleUpdateChecker.check(app, notify = true)
+                NewsUpdateChecker.check(app, notify = true)
             } finally {
                 ScheduleUpdateScheduler.scheduleNext(app)
                 pending.finish()

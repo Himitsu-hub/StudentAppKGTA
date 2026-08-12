@@ -77,10 +77,10 @@ class HomeViewModel @Inject constructor(
                     }
                 }
         }
-        // Periodically re-fetch news while home is alive (~15 min)
+        // Re-fetch news while home is open (~5 min) so new posts appear without restart
         viewModelScope.launch {
             while (isActive) {
-                delay(15 * 60 * 1000L)
+                delay(5 * 60 * 1000L)
                 loadNewsOnly()
             }
         }
