@@ -21,7 +21,10 @@ interface ScheduleApi {
     suspend fun getTeachers(): TeachersResponseDto
 
     @GET("api/news")
-    suspend fun getNews(@Query("limit") limit: Int = 10): NewsResponseDto
+    suspend fun getNews(
+        @Query("limit") limit: Int = 10,
+        @Query("force") force: Boolean = false,
+    ): NewsResponseDto
 
     @GET("api/week-type")
     suspend fun getWeekType(): WeekTypeDto

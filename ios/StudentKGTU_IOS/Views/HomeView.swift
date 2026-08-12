@@ -17,9 +17,14 @@ struct HomeView: View {
     @State private var expandedNewsURL: String?
     /// Like Android ViewModel: load once; do not reload when popping back from other screens.
     @State private var didInitialLoad = false
+    /// Manual pull-down (screen itself stays fixed — no free scroll).
+    @State private var pullDistance: CGFloat = 0
+    @State private var isPullRefreshing = false
 
     /// Always from device date (not cached state) — July–August = vacation.
     private var onVacation: Bool { HolidayUtils.isSummerVacation() }
+
+    private let pullThreshold: CGFloat = 72
 
     private var homeBg: Color { theme.isDark ? AppColors.darkNavy : AppColors.blueKGTA }
     private var onHome: Color { theme.isDark ? AppColors.darkOnSurface : .white }
@@ -33,83 +38,86 @@ struct HomeView: View {
         GeometryReader { geo in
             // Below Dynamic Island, but not too much empty space (~half of previous gap).
             let topInset = geo.safeAreaInsets.top + 12
-            // Fill the screen so layout stays like before, but ScrollView enables pull-to-refresh.
-            let minContentHeight = max(0, geo.size.height - topInset)
+            let pullY = isPullRefreshing ? pullThreshold * 0.55 : max(0, pullDistance * 0.35)
 
             ZStack(alignment: .top) {
                 homeBg.ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 0) {
-                        Color.clear.frame(height: topInset)
+                // Fixed layout — screen does not scroll; only rubber-band on pull-to-refresh.
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: topInset)
 
-                        OfflineBanner(visible: usingCached, updatedLabel: updatedLabel)
+                    OfflineBanner(visible: usingCached, updatedLabel: updatedLabel)
 
-                        if !usingCached {
-                            UpdatedAtLabel(text: updatedLabel, color: onHomeMuted, extraTop: 0)
-                        }
-
-                        HStack {
-                            Spacer()
-                            Button {
-                                theme.toggle()
-                            } label: {
-                                Image(systemName: theme.isDark ? "sun.max.fill" : "moon.fill")
-                                    .foregroundStyle(onHome)
-                                    .padding(8)
-                            }
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.top, 2)
-
-                        VStack(spacing: 8) {
-                            Image("KgtaLogo")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 168, height: 168)
-                                .padding(.top, -2)
-
-                            Text(headerWeekLine)
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundStyle(onHome)
-
-                            if onVacation {
-                                // Summer: never show next lesson (even if old cache had pairs)
-                                vacationBlock
-                            } else if isLoadingLesson {
-                                ProgressView().tint(onHome)
-                            } else if !prefs.hasGroup {
-                                Text("Выберите группу в разделе «Расписание»")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(onHomeMuted)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 12)
-                            } else {
-                                nextLessonBlock
-                            }
-
-                            Spacer(minLength: 8)
-
-                            navButton("Расписание") { path.append(AppRoute.schedule) }
-                            navButton("Преподаватели") { path.append(AppRoute.teachers) }
-                            navButton("Напоминания") { path.append(AppRoute.reminders) }
-                            navButton("Кампус и контакты") { path.append(AppRoute.campus) }
-
-                            newsSection
-                                .padding(.top, 8)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                        .frame(maxWidth: .infinity, minHeight: minContentHeight - 40, alignment: .top)
+                    if !usingCached {
+                        UpdatedAtLabel(text: updatedLabel, color: onHomeMuted, extraTop: 0)
                     }
-                    .frame(maxWidth: .infinity)
+
+                    HStack {
+                        Spacer()
+                        Button {
+                            theme.toggle()
+                        } label: {
+                            Image(systemName: theme.isDark ? "sun.max.fill" : "moon.fill")
+                                .foregroundStyle(onHome)
+                                .padding(8)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 2)
+
+                    VStack(spacing: 8) {
+                        Image("KgtaLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 168, height: 168)
+                            .padding(.top, -2)
+
+                        Text(headerWeekLine)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(onHome)
+
+                        if onVacation {
+                            // Summer: never show next lesson (even if old cache had pairs)
+                            vacationBlock
+                        } else if isLoadingLesson {
+                            ProgressView().tint(onHome)
+                        } else if !prefs.hasGroup {
+                            Text("Выберите группу в разделе «Расписание»")
+                                .font(.system(size: 13))
+                                .foregroundStyle(onHomeMuted)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 12)
+                        } else {
+                            nextLessonBlock
+                        }
+
+                        Spacer(minLength: 8)
+
+                        navButton("Расписание") { path.append(AppRoute.schedule) }
+                        navButton("Преподаватели") { path.append(AppRoute.teachers) }
+                        navButton("Напоминания") { path.append(AppRoute.reminders) }
+                        navButton("Кампус и контакты") { path.append(AppRoute.campus) }
+
+                        newsSection
+                            .padding(.top, 8)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .refreshable {
-                    // Pull down on home — force live news + lesson refresh (Android parity)
-                    await refresh(showLoading: false)
-                    _ = await NewsUpdateChecker.check(notify: false)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+                .offset(y: pullY)
+                // Pull starts on the static chrome (logo / buttons). News list still scrolls inside its box.
+                .simultaneousGesture(homePullGesture)
+
+                if pullDistance > 12 || isPullRefreshing {
+                    ProgressView()
+                        .tint(onHome)
+                        .scaleEffect(1.05)
+                        .padding(.top, topInset + 4)
+                        .opacity(isPullRefreshing ? 1 : Double(min(1, pullDistance / pullThreshold)))
                 }
-                .tint(onHome)
             }
             .ignoresSafeArea(edges: .top)
         }
@@ -140,6 +148,41 @@ struct HomeView: View {
         .onChange(of: prefs.subgroup) { _, _ in
             Task { await refresh(showLoading: false) }
         }
+    }
+
+    /// Pull-down refresh without making the whole home screen scrollable.
+    private var homePullGesture: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onChanged { value in
+                guard !isPullRefreshing else { return }
+                // Only downward pulls count (ignore horizontal / upward).
+                let dy = value.translation.height
+                if dy > 0 {
+                    // Rubber-band: resistance after threshold
+                    pullDistance = dy < pullThreshold ? dy : pullThreshold + (dy - pullThreshold) * 0.25
+                }
+            }
+            .onEnded { value in
+                guard !isPullRefreshing else { return }
+                if value.translation.height >= pullThreshold {
+                    isPullRefreshing = true
+                    pullDistance = pullThreshold
+                    Task {
+                        await refresh(showLoading: false)
+                        _ = await NewsUpdateChecker.check(notify: false)
+                        await MainActor.run {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                isPullRefreshing = false
+                                pullDistance = 0
+                            }
+                        }
+                    }
+                } else {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        pullDistance = 0
+                    }
+                }
+            }
     }
 
     /// Subtitle only — «Каникулы» already shown once in the week header line.

@@ -107,6 +107,8 @@ fun HomeScreen(
     val onHome = if (darkTheme) DarkOnSurface else Color.White
     val onHomeMuted = if (darkTheme) DarkOnSurfaceMuted else Color.White.copy(alpha = 0.85f)
 
+    // Fixed home layout (no vertical scroll of the whole screen).
+    // PullToRefreshBox = pull-to-refresh only; news LazyColumn scrolls inside its fixed box.
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
         onRefresh = { viewModel.refresh(showLoading = false) },

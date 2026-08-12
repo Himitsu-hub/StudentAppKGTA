@@ -88,7 +88,7 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadNewsOnly() {
         try {
-            val result = newsRepository.getNews(15)
+            val result = newsRepository.getNews(limit = 15, force = true)
             _uiState.update {
                 it.copy(
                     news = result.news,
@@ -220,7 +220,7 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadNews(): LoadMeta {
         return try {
-            val result = newsRepository.getNews(15)
+            val result = newsRepository.getNews(limit = 15, force = true)
             _uiState.update {
                 it.copy(
                     news = result.news,

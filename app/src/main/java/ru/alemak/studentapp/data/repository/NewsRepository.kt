@@ -19,10 +19,10 @@ class NewsRepository @Inject constructor(
     private val api: ScheduleApi,
     private val newsDao: NewsDao,
 ) {
-    suspend fun getNews(limit: Int = 15): NewsLoadResult {
+    suspend fun getNews(limit: Int = 15, force: Boolean = false): NewsLoadResult {
         // Always try the server first — replace local cache when remote is non-empty
         val remote = runCatching {
-            api.getNews(limit).news.map { it.toDomain() }
+            api.getNews(limit = limit, force = force).news.map { it.toDomain() }
         }.getOrNull()
 
         if (remote != null && remote.isNotEmpty()) {
