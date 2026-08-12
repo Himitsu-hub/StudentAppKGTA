@@ -107,109 +107,117 @@ fun HomeScreen(
     val onHome = if (darkTheme) DarkOnSurface else Color.White
     val onHomeMuted = if (darkTheme) DarkOnSurfaceMuted else Color.White.copy(alpha = 0.85f)
 
-    // Fixed home layout (no vertical scroll of the whole screen).
-    // PullToRefreshBox = pull-to-refresh only; news LazyColumn scrolls inside its fixed box.
-    PullToRefreshBox(
-        isRefreshing = state.isRefreshing,
-        onRefresh = { viewModel.refresh(showLoading = false) },
+    // Fixed home layout. Pull-to-refresh ONLY on the upper chrome (logo / buttons).
+    // News LazyColumn is outside PullToRefreshBox so scrolling news never refreshes the app.
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(homeBg)
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        OfflineBanner(
-            visible = state.usingCachedData,
-            updatedLabel = state.updatedLabel,
-        )
-        if (!state.usingCachedData) {
-            UpdatedAtLabel(text = state.updatedLabel, color = onHomeMuted)
-        }
-
-        Box(
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { viewModel.refresh(showLoading = false) },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp),
+                .weight(1f),
         ) {
-            IconButton(
-                onClick = onToggleTheme,
-                modifier = Modifier.align(Alignment.CenterEnd),
-            ) {
-                Icon(
-                    imageVector = if (darkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                    contentDescription = if (darkTheme) "Светлая тема" else "Тёмная тема",
-                    tint = onHome,
+            Column(Modifier.fillMaxSize()) {
+                OfflineBanner(
+                    visible = state.usingCachedData,
+                    updatedLabel = state.updatedLabel,
                 )
+                if (!state.usingCachedData) {
+                    UpdatedAtLabel(text = state.updatedLabel, color = onHomeMuted)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                ) {
+                    IconButton(
+                        onClick = onToggleTheme,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    ) {
+                        Icon(
+                            imageVector = if (darkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = if (darkTheme) "Светлая тема" else "Тёмная тема",
+                            tint = onHome,
+                        )
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.kgta_logo),
+                        contentDescription = "Логотип КГТУ",
+                        modifier = Modifier
+                            .size(152.dp)
+                            .offset(y = (-4).dp),
+                    )
+
+                    Text(
+                        text = state.weekType,
+                        color = onHome,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                    )
+
+                    Spacer(Modifier.height(4.dp))
+
+                    when {
+                        state.isLoadingLesson -> {
+                            CircularProgressIndicator(color = onHome, modifier = Modifier.size(20.dp))
+                        }
+                        state.isVacation -> {
+                            NextLessonBlock(
+                                lesson = null,
+                                darkTheme = darkTheme,
+                                vacationTitle = null,
+                                vacationSubtitle = state.vacationSubtitle
+                                    ?: "Лето · занятия с 1 сентября",
+                            )
+                        }
+                        !state.hasGroup -> {
+                            Text(
+                                text = "Выберите группу в разделе «Расписание»",
+                                color = onHomeMuted,
+                                textAlign = TextAlign.Center,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                            )
+                        }
+                        else -> NextLessonBlock(state.nextLesson, darkTheme = darkTheme)
+                    }
+
+                    Spacer(Modifier.weight(1f))
+
+                    NavButton("Расписание", onOpenSchedule, darkTheme = darkTheme)
+                    Spacer(Modifier.height(4.dp))
+                    NavButton("Преподаватели", onOpenTeachers, darkTheme = darkTheme)
+                    Spacer(Modifier.height(4.dp))
+                    NavButton("Напоминания", onOpenReminders, darkTheme = darkTheme)
+                    Spacer(Modifier.height(4.dp))
+                    NavButton("Кампус и контакты", onOpenCampus, darkTheme = darkTheme)
+                }
             }
         }
 
+        // News sits BELOW the pull zone — list scroll never triggers refresh.
+        val newsPanelBg = if (darkTheme) DarkCard.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.1f)
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 8.dp, bottom = 8.dp),
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.kgta_logo),
-                contentDescription = "Логотип КГТУ",
-                modifier = Modifier
-                    .size(152.dp)
-                    .offset(y = (-4).dp),
-            )
-
-            Text(
-                text = state.weekType,
-                color = onHome,
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp,
-            )
-
-            Spacer(Modifier.height(4.dp))
-
-            when {
-                state.isLoadingLesson -> {
-                    CircularProgressIndicator(color = onHome, modifier = Modifier.size(20.dp))
-                }
-                state.isVacation -> {
-                    // «Каникулы» already in weekType header — subtitle only (no double title).
-                    NextLessonBlock(
-                        lesson = null,
-                        darkTheme = darkTheme,
-                        vacationTitle = null,
-                        vacationSubtitle = state.vacationSubtitle
-                            ?: "Лето · занятия с 1 сентября",
-                    )
-                }
-                !state.hasGroup -> {
-                    Text(
-                        text = "Выберите группу в разделе «Расписание»",
-                        color = onHomeMuted,
-                        textAlign = TextAlign.Center,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                    )
-                }
-                else -> NextLessonBlock(state.nextLesson, darkTheme = darkTheme)
-            }
-
-            // Free space goes HERE — not into the news list
-            Spacer(Modifier.weight(1f))
-
-            NavButton("Расписание", onOpenSchedule, darkTheme = darkTheme)
-            Spacer(Modifier.height(4.dp))
-            NavButton("Преподаватели", onOpenTeachers, darkTheme = darkTheme)
-            Spacer(Modifier.height(4.dp))
-            NavButton("Напоминания", onOpenReminders, darkTheme = darkTheme)
-            Spacer(Modifier.height(4.dp))
-            NavButton("Кампус и контакты", onOpenCampus, darkTheme = darkTheme)
-
-            Spacer(Modifier.height(8.dp))
-
-            // Fixed height = exactly 3 posts (does not grow with screen)
-            val newsPanelBg = if (darkTheme) DarkCard.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.1f)
             when {
                 state.isLoadingNews -> {
                     Box(
@@ -247,11 +255,8 @@ fun HomeScreen(
                     }
                 }
             }
-
-            Spacer(Modifier.height(8.dp))
         }
     }
-    } // PullToRefreshBox
 }
 
 @Composable

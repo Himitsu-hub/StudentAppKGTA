@@ -24,7 +24,7 @@ struct HomeView: View {
     /// Always from device date (not cached state) — July–August = vacation.
     private var onVacation: Bool { HolidayUtils.isSummerVacation() }
 
-    private let pullThreshold: CGFloat = 72
+    private let pullThreshold: CGFloat = 80
 
     private var homeBg: Color { theme.isDark ? AppColors.darkNavy : AppColors.blueKGTA }
     private var onHome: Color { theme.isDark ? AppColors.darkOnSurface : .white }
@@ -43,73 +43,77 @@ struct HomeView: View {
             ZStack(alignment: .top) {
                 homeBg.ignoresSafeArea()
 
-                // Fixed layout — screen does not scroll; only rubber-band on pull-to-refresh.
+                // Fixed layout — whole home does not scroll.
+                // Pull-to-refresh is ONLY on the upper chrome (logo / nav), never on news list.
                 VStack(spacing: 0) {
                     Color.clear.frame(height: topInset)
 
-                    OfflineBanner(visible: usingCached, updatedLabel: updatedLabel)
+                    VStack(spacing: 0) {
+                        OfflineBanner(visible: usingCached, updatedLabel: updatedLabel)
 
-                    if !usingCached {
-                        UpdatedAtLabel(text: updatedLabel, color: onHomeMuted, extraTop: 0)
-                    }
+                        if !usingCached {
+                            UpdatedAtLabel(text: updatedLabel, color: onHomeMuted, extraTop: 0)
+                        }
 
-                    HStack {
-                        Spacer()
-                        Button {
-                            theme.toggle()
-                        } label: {
-                            Image(systemName: theme.isDark ? "sun.max.fill" : "moon.fill")
+                        HStack {
+                            Spacer()
+                            Button {
+                                theme.toggle()
+                            } label: {
+                                Image(systemName: theme.isDark ? "sun.max.fill" : "moon.fill")
+                                    .foregroundStyle(onHome)
+                                    .padding(8)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.top, 2)
+
+                        VStack(spacing: 8) {
+                            Image("KgtaLogo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 168, height: 168)
+                                .padding(.top, -2)
+
+                            Text(headerWeekLine)
+                                .font(.system(size: 20, weight: .bold))
                                 .foregroundStyle(onHome)
-                                .padding(8)
+
+                            if onVacation {
+                                vacationBlock
+                            } else if isLoadingLesson {
+                                ProgressView().tint(onHome)
+                            } else if !prefs.hasGroup {
+                                Text("Выберите группу в разделе «Расписание»")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(onHomeMuted)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 12)
+                            } else {
+                                nextLessonBlock
+                            }
+
+                            Spacer(minLength: 8)
+
+                            navButton("Расписание") { path.append(AppRoute.schedule) }
+                            navButton("Преподаватели") { path.append(AppRoute.teachers) }
+                            navButton("Напоминания") { path.append(AppRoute.reminders) }
+                            navButton("Кампус и контакты") { path.append(AppRoute.campus) }
                         }
+                        .padding(.horizontal, 16)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 2)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .contentShape(Rectangle())
+                    // Only this upper zone accepts pull-to-refresh (not the news box).
+                    .simultaneousGesture(homePullGesture)
 
-                    VStack(spacing: 8) {
-                        Image("KgtaLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 168, height: 168)
-                            .padding(.top, -2)
-
-                        Text(headerWeekLine)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(onHome)
-
-                        if onVacation {
-                            // Summer: never show next lesson (even if old cache had pairs)
-                            vacationBlock
-                        } else if isLoadingLesson {
-                            ProgressView().tint(onHome)
-                        } else if !prefs.hasGroup {
-                            Text("Выберите группу в разделе «Расписание»")
-                                .font(.system(size: 13))
-                                .foregroundStyle(onHomeMuted)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 12)
-                        } else {
-                            nextLessonBlock
-                        }
-
-                        Spacer(minLength: 8)
-
-                        navButton("Расписание") { path.append(AppRoute.schedule) }
-                        navButton("Преподаватели") { path.append(AppRoute.teachers) }
-                        navButton("Напоминания") { path.append(AppRoute.reminders) }
-                        navButton("Кампус и контакты") { path.append(AppRoute.campus) }
-
-                        newsSection
-                            .padding(.top, 8)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    newsSection
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
                 }
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
                 .offset(y: pullY)
-                // Pull starts on the static chrome (logo / buttons). News list still scrolls inside its box.
-                .simultaneousGesture(homePullGesture)
 
                 if pullDistance > 12 || isPullRefreshing {
                     ProgressView()
@@ -150,21 +154,23 @@ struct HomeView: View {
         }
     }
 
-    /// Pull-down refresh without making the whole home screen scrollable.
+    /// Pull-down refresh on the UPPER chrome only (logo / buttons). News scrolling never triggers this.
     private var homePullGesture: some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+        DragGesture(minimumDistance: 20, coordinateSpace: .local)
             .onChanged { value in
                 guard !isPullRefreshing else { return }
-                // Only downward pulls count (ignore horizontal / upward).
                 let dy = value.translation.height
-                if dy > 0 {
-                    // Rubber-band: resistance after threshold
-                    pullDistance = dy < pullThreshold ? dy : pullThreshold + (dy - pullThreshold) * 0.25
+                // Require a mostly-vertical downward pull (ignore horizontal / tiny jiggle).
+                guard dy > 0, abs(value.translation.width) < dy * 0.85 else {
+                    if pullDistance > 0 { pullDistance = 0 }
+                    return
                 }
+                pullDistance = dy < pullThreshold ? dy : pullThreshold + (dy - pullThreshold) * 0.2
             }
             .onEnded { value in
                 guard !isPullRefreshing else { return }
-                if value.translation.height >= pullThreshold {
+                let dy = value.translation.height
+                if dy >= pullThreshold, abs(value.translation.width) < dy * 0.85 {
                     isPullRefreshing = true
                     pullDistance = pullThreshold
                     Task {
