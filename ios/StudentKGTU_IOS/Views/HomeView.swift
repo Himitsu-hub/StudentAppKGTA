@@ -33,73 +33,83 @@ struct HomeView: View {
         GeometryReader { geo in
             // Below Dynamic Island, but not too much empty space (~half of previous gap).
             let topInset = geo.safeAreaInsets.top + 12
+            // Fill the screen so layout stays like before, but ScrollView enables pull-to-refresh.
+            let minContentHeight = max(0, geo.size.height - topInset)
 
             ZStack(alignment: .top) {
                 homeBg.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: topInset)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: topInset)
 
-                    OfflineBanner(visible: usingCached, updatedLabel: updatedLabel)
+                        OfflineBanner(visible: usingCached, updatedLabel: updatedLabel)
 
-                    if !usingCached {
-                        UpdatedAtLabel(text: updatedLabel, color: onHomeMuted, extraTop: 0)
-                    }
+                        if !usingCached {
+                            UpdatedAtLabel(text: updatedLabel, color: onHomeMuted, extraTop: 0)
+                        }
 
-                    HStack {
-                        Spacer()
-                        Button {
-                            theme.toggle()
-                        } label: {
-                            Image(systemName: theme.isDark ? "sun.max.fill" : "moon.fill")
+                        HStack {
+                            Spacer()
+                            Button {
+                                theme.toggle()
+                            } label: {
+                                Image(systemName: theme.isDark ? "sun.max.fill" : "moon.fill")
+                                    .foregroundStyle(onHome)
+                                    .padding(8)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.top, 2)
+
+                        VStack(spacing: 8) {
+                            Image("KgtaLogo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 168, height: 168)
+                                .padding(.top, -2)
+
+                            Text(headerWeekLine)
+                                .font(.system(size: 20, weight: .bold))
                                 .foregroundStyle(onHome)
-                                .padding(8)
+
+                            if onVacation {
+                                // Summer: never show next lesson (even if old cache had pairs)
+                                vacationBlock
+                            } else if isLoadingLesson {
+                                ProgressView().tint(onHome)
+                            } else if !prefs.hasGroup {
+                                Text("Выберите группу в разделе «Расписание»")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(onHomeMuted)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 12)
+                            } else {
+                                nextLessonBlock
+                            }
+
+                            Spacer(minLength: 8)
+
+                            navButton("Расписание") { path.append(AppRoute.schedule) }
+                            navButton("Преподаватели") { path.append(AppRoute.teachers) }
+                            navButton("Напоминания") { path.append(AppRoute.reminders) }
+                            navButton("Кампус и контакты") { path.append(AppRoute.campus) }
+
+                            newsSection
+                                .padding(.top, 8)
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                        .frame(maxWidth: .infinity, minHeight: minContentHeight - 40, alignment: .top)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 2)
-
-                    VStack(spacing: 8) {
-                        Image("KgtaLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 168, height: 168)
-                            .padding(.top, -2)
-
-                        Text(headerWeekLine)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(onHome)
-
-                        if onVacation {
-                            // Summer: never show next lesson (even if old cache had pairs)
-                            vacationBlock
-                        } else if isLoadingLesson {
-                            ProgressView().tint(onHome)
-                        } else if !prefs.hasGroup {
-                            Text("Выберите группу в разделе «Расписание»")
-                                .font(.system(size: 13))
-                                .foregroundStyle(onHomeMuted)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 12)
-                        } else {
-                            nextLessonBlock
-                        }
-
-                        Spacer(minLength: 8)
-
-                        navButton("Расписание") { path.append(AppRoute.schedule) }
-                        navButton("Преподаватели") { path.append(AppRoute.teachers) }
-                        navButton("Напоминания") { path.append(AppRoute.reminders) }
-                        navButton("Кампус и контакты") { path.append(AppRoute.campus) }
-
-                        newsSection
-                            .padding(.top, 8)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .refreshable {
+                    // Pull down on home — force live news + lesson refresh (Android parity)
+                    await refresh(showLoading: false)
+                    _ = await NewsUpdateChecker.check(notify: false)
+                }
+                .tint(onHome)
             }
             .ignoresSafeArea(edges: .top)
         }
@@ -112,7 +122,7 @@ struct HomeView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5 * 60 * 1_000_000_000)
                 if NetworkMonitor.shared.isOnline {
-                    let meta = await loadNews()
+                    let meta = await loadNews(force: true)
                     if meta.updatedAt > 0 {
                         updatedLabel = TimeFormat.updatedAtLabel(millis: meta.updatedAt) ?? updatedLabel
                     }
@@ -349,7 +359,7 @@ struct HomeView: View {
             weekType = "Каникулы"
             nextLesson = nil
             isLoadingLesson = false
-            let newsMeta = await loadNews()
+            let newsMeta = await loadNews(force: true)
             usingCached = !NetworkMonitor.shared.isOnline
             updatedLabel = TimeFormat.updatedAtLabel(millis: newsMeta.updatedAt) ?? updatedLabel
             isLoadingNews = false
@@ -358,7 +368,7 @@ struct HomeView: View {
         }
 
         async let lessonMeta = loadLesson()
-        async let newsMeta = loadNews()
+        async let newsMeta = loadNews(force: true)
         let (lm, nm) = await (lessonMeta, newsMeta)
         let latest = max(lm.updatedAt, nm.updatedAt)
         // Banner only if truly offline — not when online with any cached fallback
@@ -422,8 +432,8 @@ struct HomeView: View {
         return LoadMeta(fromCache: result.isOffline, updatedAt: result.updatedAtMillis)
     }
 
-    private func loadNews() async -> LoadMeta {
-        let r = await NewsRepository.shared.getNews(limit: 15)
+    private func loadNews(force: Bool = false) async -> LoadMeta {
+        let r = await NewsRepository.shared.getNews(limit: 15, force: force)
         // Prefer non-empty remote; never wipe good cache with empty response
         if !r.news.isEmpty {
             news = r.news

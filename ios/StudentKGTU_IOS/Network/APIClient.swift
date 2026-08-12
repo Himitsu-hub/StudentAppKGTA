@@ -60,8 +60,11 @@ actor APIClient {
         return r.weekType
     }
 
-    func news(limit: Int = 10) async throws -> [NewsItem] {
-        let r: NewsResponse = try await get("/api/news", query: [("limit", String(limit))])
+    func news(limit: Int = 10, force: Bool = false) async throws -> [NewsItem] {
+        var q: [(String, String)] = [("limit", String(limit))]
+        // force=true → server re-scrapes dksta.ru so pull-to-refresh gets brand-new posts
+        if force { q.append(("force", "true")) }
+        let r: NewsResponse = try await get("/api/news", query: q)
         return r.news
     }
 

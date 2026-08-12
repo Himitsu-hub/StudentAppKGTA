@@ -6,7 +6,8 @@ actor NewsRepository {
     /// Stable cache key so limit changes still hit the same offline store.
     private static let cacheKey = "news_latest"
 
-    func getNews(limit: Int = 15) async -> (news: [NewsItem], fromCache: Bool, updatedAt: Double) {
+    /// - Parameter force: ask server to scrape/refresh even if its warm cache is fresh.
+    func getNews(limit: Int = 15, force: Bool = false) async -> (news: [NewsItem], fromCache: Bool, updatedAt: Double) {
         let key = Self.cacheKey
 
         // Offline: cache only, no long network wait
@@ -16,7 +17,7 @@ actor NewsRepository {
         }
 
         do {
-            let remote = try await APIClient.shared.news(limit: limit)
+            let remote = try await APIClient.shared.news(limit: limit, force: force)
             let now = Date().timeIntervalSince1970 * 1000
             if !remote.isEmpty {
                 JSONCache.save(remote, key: key)
