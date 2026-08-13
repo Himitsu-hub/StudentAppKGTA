@@ -648,6 +648,15 @@ async def upload_schedule(
             pass
 
 
+def _iso_utc(dt: Optional[datetime]) -> Optional[str]:
+    """Serialize naive DB datetimes as UTC so browsers show correct local time."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+
 @app.get("/admin/status")
 def admin_status(
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
@@ -664,7 +673,8 @@ def admin_status(
                 "course": log.course,
                 "groups_count": log.groups_count,
                 "lessons_count": log.lessons_count,
-                "uploaded_at": log.uploaded_at.isoformat() if log.uploaded_at else None,
+                # Always mark as UTC (stored with datetime.utcnow)
+                "uploaded_at": _iso_utc(log.uploaded_at),
                 "status": log.status,
                 "error": log.error_message,
             }
@@ -1024,7 +1034,10 @@ async function loadHistory() {
   tbody.innerHTML = '';
   (data.uploads || []).forEach(u => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${u.uploaded_at ? new Date(u.uploaded_at).toLocaleString() : ''}</td>
+    const when = u.uploaded_at
+      ? new Date(u.uploaded_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })
+      : '';
+    tr.innerHTML = `<td>${when}</td>
       <td>${u.filename || ''}</td><td>${u.course}</td><td>${u.groups_count}</td>
       <td>${u.lessons_count}</td>
       <td class="${u.status === 'success' ? 'ok' : 'err'}">${u.status}</td>`;
