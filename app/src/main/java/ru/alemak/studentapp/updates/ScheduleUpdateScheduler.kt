@@ -12,8 +12,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 object ScheduleUpdateScheduler {
-    /** How often the app asks the server: «есть ли новое расписание?» */
-    const val INTERVAL_MS: Long = 15 * 60 * 1000L // 15 minutes
+    /**
+     * How often the app asks: «есть ли новое расписание?»
+     * ~60s so students get a local notification quickly after admin upload
+     * (true push would need FCM; this is best-effort polling).
+     */
+    const val INTERVAL_MS: Long = 60 * 1000L // 1 minute
 
     private const val REQUEST_CODE = 77201
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

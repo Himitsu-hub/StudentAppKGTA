@@ -81,13 +81,21 @@ class HomeViewModel @Inject constructor(
                     }
                 }
         }
-        // Re-fetch news while home is open (~90s) + notify if feed fingerprint changed
+        // While home is open: refresh news + poll schedule/news versions often
+        // so admin Excel uploads produce a notification within ~1 minute.
         viewModelScope.launch {
             while (isActive) {
-                delay(90_000L)
+                delay(45_000L)
                 loadNewsOnly()
                 try {
                     NewsUpdateChecker.check(appContext, notify = true)
+                } catch (_: Exception) {
+                }
+                try {
+                    ru.alemak.studentapp.updates.ScheduleUpdateChecker.check(
+                        appContext,
+                        notify = true,
+                    )
                 } catch (_: Exception) {
                 }
             }

@@ -51,6 +51,7 @@ enum ScheduleUpdateChecker {
         guard let url = URL(string: "https://apistudentkgtu.ru/api/schedule-updates") else { return nil }
         var req = URLRequest(url: url)
         req.timeoutInterval = 15
+        req.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: req)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             return nil
@@ -92,7 +93,8 @@ enum ScheduleUpdateChecker {
 
     static func scheduleNextBackground() {
         let req = BGAppRefreshTaskRequest(identifier: bgTaskId)
-        req.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // ~15 min like Android
+        // Ask iOS for ~2 min; system may delay, but sooner is better after Excel upload.
+        req.earliestBeginDate = Date(timeIntervalSinceNow: 2 * 60)
         try? BGTaskScheduler.shared.submit(req)
     }
 }

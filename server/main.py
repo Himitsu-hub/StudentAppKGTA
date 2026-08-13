@@ -607,6 +607,9 @@ async def upload_schedule(
 
         file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
         shutil.copy2(tmp_path, file_path)
+        # Force mtime = now so /api/schedule-updates version always changes
+        # even if the same Excel bytes are re-uploaded (copy2 keeps source mtime).
+        os.utime(file_path, None)
 
         total_groups, total_lessons = index_course_file(db, course, file.filename)
         log = UploadLog(
