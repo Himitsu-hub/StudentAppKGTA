@@ -1,8 +1,10 @@
 package ru.alemak.studentapp.ui.home
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -23,6 +25,7 @@ import ru.alemak.studentapp.data.model.Lesson
 import ru.alemak.studentapp.data.model.NewsItem
 import ru.alemak.studentapp.data.repository.NewsRepository
 import ru.alemak.studentapp.data.repository.ScheduleRepository
+import ru.alemak.studentapp.updates.NewsUpdateChecker
 import ru.alemak.studentapp.util.DateUtils
 import ru.alemak.studentapp.util.HolidayUtils
 import ru.alemak.studentapp.util.NetworkMonitor
@@ -50,6 +53,7 @@ data class HomeUiState(
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val scheduleRepository: ScheduleRepository,
     private val newsRepository: NewsRepository,
     private val userPreferences: UserPreferences,
@@ -77,11 +81,15 @@ class HomeViewModel @Inject constructor(
                     }
                 }
         }
-        // Re-fetch news while home is open (~5 min) so new posts appear without restart
+        // Re-fetch news while home is open (~90s) + notify if feed fingerprint changed
         viewModelScope.launch {
             while (isActive) {
-                delay(5 * 60 * 1000L)
+                delay(90_000L)
                 loadNewsOnly()
+                try {
+                    NewsUpdateChecker.check(appContext, notify = true)
+                } catch (_: Exception) {
+                }
             }
         }
     }

@@ -137,8 +137,8 @@ def ensure_course_indexed(db: Session, course: int, force: bool = False) -> None
         index_course_file(db, course)
 
 
-def _news_refresh_loop(interval_sec: int = 5 * 60) -> None:
-    """Background: re-scrape dksta.ru often so new posts appear without redeploy."""
+def _news_refresh_loop(interval_sec: int = 90) -> None:
+    """Background: re-scrape dksta.ru often so new posts appear within ~1–2 minutes."""
     import threading
     import time
 
@@ -146,7 +146,7 @@ def _news_refresh_loop(interval_sec: int = 5 * 60) -> None:
 
     def worker() -> None:
         # First loop after a short delay (startup already scrapes once)
-        time.sleep(30)
+        time.sleep(20)
         while True:
             try:
                 n = scrape_news(20)
@@ -177,14 +177,14 @@ def startup():
     finally:
         db.close()
 
-    # Warm news cache immediately + keep refreshing in background (~every 5 min)
+    # Warm news cache immediately + keep refreshing in background (~every 90s)
     try:
         from news_scraper import scrape_news
 
         scrape_news(20)
     except Exception as exc:
         print(f"[news] startup scrape: {exc}")
-    _news_refresh_loop(5 * 60)
+    _news_refresh_loop(90)
 
 
 @app.get("/health")

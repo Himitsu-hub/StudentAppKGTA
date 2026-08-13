@@ -47,6 +47,11 @@
             android:exported="false" />
 
         <receiver
+            android:name=".updates.NewsUpdateReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <receiver
             android:name=".widget.ScheduleWidgetProviderWide"
             android:exported="true"
             android:label="@string/widget_schedule_title_wide">

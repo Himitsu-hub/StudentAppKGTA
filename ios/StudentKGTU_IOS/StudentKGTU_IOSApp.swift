@@ -3,6 +3,7 @@ import BackgroundTasks
 
 @main
 struct StudentKGTU_IOSApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var prefs = UserPreferences.shared
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var reminders = RemindersStore.shared
@@ -28,6 +29,14 @@ struct StudentKGTU_IOSApp: App {
                     await ScheduleUpdateChecker.check(notify: true)
                     await NewsUpdateChecker.check(notify: true)
                     await WidgetUpdater.updateNow()
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // When user returns to the app — check news immediately
+                    guard phase == .active else { return }
+                    Task {
+                        NewsUpdateChecker.scheduleNextBackground()
+                        _ = await NewsUpdateChecker.check(notify: true)
+                    }
                 }
         }
     }

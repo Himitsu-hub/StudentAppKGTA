@@ -94,7 +94,8 @@ enum NewsUpdateChecker {
 
     static func scheduleNextBackground() {
         let req = BGAppRefreshTaskRequest(identifier: bgTaskId)
-        req.earliestBeginDate = Date(timeIntervalSinceNow: 10 * 60)
+        // Ask iOS for ~5 min; system may delay, but sooner is better for news.
+        req.earliestBeginDate = Date(timeIntervalSinceNow: 5 * 60)
         try? BGTaskScheduler.shared.submit(req)
     }
 }

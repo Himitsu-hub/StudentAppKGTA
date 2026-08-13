@@ -19,6 +19,7 @@ class ScheduleUpdateReceiver : BroadcastReceiver() {
         scope.launch {
             try {
                 ScheduleUpdateChecker.check(app, notify = true)
+                // News has its own faster scheduler; still check here as a backup.
                 NewsUpdateChecker.check(app, notify = true)
             } finally {
                 ScheduleUpdateScheduler.scheduleNext(app)

@@ -130,9 +130,9 @@ struct HomeView: View {
             guard !didInitialLoad else { return }
             didInitialLoad = true
             await refresh(showLoading: true)
-            // Poll news every 5 minutes while home is open + check for new-post notifications
+            // Poll news every ~90s while home is open + notify on new posts
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5 * 60 * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 90 * 1_000_000_000)
                 if NetworkMonitor.shared.isOnline {
                     let meta = await loadNews(force: true)
                     if meta.updatedAt > 0 {

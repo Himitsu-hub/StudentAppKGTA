@@ -1,4 +1,10 @@
-"""Scrape news from dksta.ru and keep a local JSON cache as fallback."""
+"""Scrape news from dksta.ru and keep a local JSON cache as fallback.
+
+Resilience goals:
+- Never wipe a good cache with an empty/failed scrape.
+- Multiple HTML parse strategies if the site markup shifts.
+- Fast background refresh so clients see new posts quickly.
+"""
 
 from __future__ import annotations
 
@@ -19,8 +25,8 @@ NEWS_URL = f"{BASE_URL}/"
 CACHE_PATH = os.path.join(os.path.dirname(__file__), "news_cache.json")
 META_PATH = os.path.join(os.path.dirname(__file__), "news_meta.json")
 
-# If cache is younger than this, /api/news can skip a live scrape.
-FRESH_SECONDS = 90
+# Warm cache window for /api/news (background loop is the source of truth).
+FRESH_SECONDS = 45
 
 HEADERS = {
     "User-Agent": (
@@ -31,6 +37,7 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Cache-Control": "no-cache",
     "Pragma": "no-cache",
+    "Connection": "close",
 }
 
 
@@ -67,7 +74,56 @@ def _clean_title(title: str, date: str) -> str:
     return title
 
 
+def _item_from_block(div, link_tag) -> dict[str, Any] | None:
+    href = link_tag.get("href", "") if link_tag else ""
+    if "news_post" not in href and "/novosti/news_post" not in href:
+        # Accept /novosti/... deep links that are posts
+        if "/novosti/" not in href or href.rstrip("/").endswith("novosti"):
+            return None
+
+    url = _normalize_url(href)
+    if not url:
+        return None
+
+    title = (link_tag.get_text(" ", strip=True) if link_tag else "") or ""
+    if not title or title.isdigit():
+        heading = div.find(["h2", "h3", "h4", "strong", "span"]) if div else None
+        if heading:
+            title = heading.get_text(" ", strip=True)
+    if not title or title.isdigit() or len(title) < 4:
+        return None
+
+    img_tag = div.find("img") if div else None
+    image_url = ""
+    if img_tag:
+        src = img_tag.get("src") or img_tag.get("data-src") or img_tag.get("data-lazy-src") or ""
+        image_url = _normalize_url(src) if src else ""
+
+    text = div.get_text(" ", strip=True) if div else title
+    date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", text)
+    date = date_match.group(1) if date_match else ""
+    title = _clean_title(title, date)
+
+    desc = ""
+    p_tag = div.find("p") if div else None
+    if p_tag:
+        desc = p_tag.get_text(" ", strip=True)
+    elif date:
+        after = text.split(date, 1)
+        if len(after) > 1 and len(after[1].strip()) > 10:
+            desc = after[1].strip()[:220]
+
+    return {
+        "title": title,
+        "url": url,
+        "image_url": image_url,
+        "date": date,
+        "description": desc,
+    }
+
+
 def _parse_news_wrap(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    """Primary parser: site's news-wrap blocks."""
     news_wrap = soup.find("div", class_="news-wrap")
     if not news_wrap:
         return []
@@ -79,71 +135,77 @@ def _parse_news_wrap(soup: BeautifulSoup) -> list[dict[str, Any]]:
         classes = div.get("class") or []
         if "news-pagination" in classes or "news-loading" in classes:
             continue
-
         link_tag = div.find("a", href=True)
         if not link_tag:
             continue
-
-        href = link_tag.get("href", "")
-        if "news_post" not in href and "/novosti/" not in href:
+        item = _item_from_block(div, link_tag)
+        if not item:
             continue
-
-        url = _normalize_url(href)
-        if not url or url in seen_urls:
+        u = item["url"]
+        if u in seen_urls:
             continue
-
-        title = link_tag.get_text(" ", strip=True)
-        if not title or title.isdigit():
-            # Sometimes the visible title is outside the <a>
-            heading = div.find(["h2", "h3", "h4", "strong"])
-            if heading:
-                title = heading.get_text(" ", strip=True)
-        if not title or title.isdigit():
-            continue
-
-        img_tag = div.find("img")
-        image_url = ""
-        if img_tag:
-            src = img_tag.get("src") or img_tag.get("data-src") or ""
-            image_url = _normalize_url(src) if src else ""
-
-        text = div.get_text(" ", strip=True)
-        date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", text)
-        date = date_match.group(1) if date_match else ""
-        title = _clean_title(title, date)
-
-        desc = ""
-        p_tag = div.find("p")
-        if p_tag:
-            desc = p_tag.get_text(" ", strip=True)
-        elif date:
-            after = text.split(date, 1)
-            if len(after) > 1 and len(after[1].strip()) > 10:
-                desc = after[1].strip()[:220]
-
-        seen_urls.add(url)
-        scraped.append(
-            {
-                "title": title,
-                "url": url,
-                "image_url": image_url,
-                "date": date,
-                "description": desc,
-            }
-        )
+        seen_urls.add(u)
+        scraped.append(item)
     return scraped
 
 
-def _fetch_soup(url: str, timeout: int = 20) -> BeautifulSoup | None:
+def _parse_news_links_fallback(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    """
+    Fallback if news-wrap layout changes: walk every news_post link and
+    take nearest block ancestor for date/image.
+    """
+    scraped: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for a in soup.find_all("a", href=True):
+        href = a.get("href") or ""
+        if "news_post" not in href:
+            continue
+        # Prefer a reasonably sized container
+        block = a
+        for _ in range(5):
+            if block.parent is None:
+                break
+            block = block.parent
+            if block.name in ("div", "article", "li", "section"):
+                # stop at a container that has some text beyond the title
+                if len(block.get_text(" ", strip=True)) > len(a.get_text(" ", strip=True)) + 5:
+                    break
+        item = _item_from_block(block, a)
+        if not item:
+            continue
+        u = item["url"]
+        if u in seen_urls:
+            continue
+        seen_urls.add(u)
+        scraped.append(item)
+    return scraped
+
+
+def _parse_page(soup: BeautifulSoup) -> list[dict[str, Any]]:
+    primary = _parse_news_wrap(soup)
+    if len(primary) >= 3:
+        return primary
+    fallback = _parse_news_links_fallback(soup)
+    # Prefer whichever found more items
+    if len(fallback) > len(primary):
+        print(f"[news] using fallback parser ({len(fallback)} items, wrap had {len(primary)})")
+        return fallback
+    return primary
+
+
+def _fetch_soup(url: str, timeout: int = 18) -> BeautifulSoup | None:
     last_err: Exception | None = None
-    for attempt in range(3):
+    for attempt in range(4):
         try:
             resp = requests.get(url, headers=HEADERS, timeout=timeout)
             resp.raise_for_status()
+            # Some hosts return empty bodies on glitches
+            if not resp.text or len(resp.text) < 200:
+                raise RuntimeError(f"short body ({len(resp.text or '')} bytes)")
             return BeautifulSoup(resp.text, "html.parser")
         except Exception as exc:
             last_err = exc
-            time.sleep(0.6 * (attempt + 1))
+            time.sleep(0.5 * (attempt + 1))
     print(f"[news] fetch failed {url}: {last_err}")
     return None
 
@@ -184,15 +246,26 @@ def load_meta() -> dict[str, Any]:
         return {}
 
 
-def save_meta(news: list[dict[str, Any]]) -> dict[str, Any]:
+def save_meta(
+    news: list[dict[str, Any]],
+    *,
+    ok: bool = True,
+    error: str | None = None,
+) -> dict[str, Any]:
+    prev = load_meta()
     top = news[0] if news else {}
+    now = time.time()
     meta = {
-        "last_scrape_ts": time.time(),
-        "fingerprint": fingerprint_for(news),
-        "latest_url": top.get("url") or "",
-        "latest_title": top.get("title") or "",
-        "latest_date": top.get("date") or "",
-        "count": len(news),
+        "last_scrape_ts": now if ok else float(prev.get("last_scrape_ts") or 0),
+        "last_attempt_ts": now,
+        "last_ok": ok,
+        "last_error": error or "",
+        "fingerprint": fingerprint_for(news) if news else (prev.get("fingerprint") or ""),
+        "latest_url": top.get("url") or prev.get("latest_url") or "",
+        "latest_title": top.get("title") or prev.get("latest_title") or "",
+        "latest_date": top.get("date") or prev.get("latest_date") or "",
+        "count": len(news) if news else int(prev.get("count") or 0),
+        "fail_streak": 0 if ok else int(prev.get("fail_streak") or 0) + 1,
     }
     try:
         with open(META_PATH, "w", encoding="utf-8") as f:
@@ -224,16 +297,18 @@ def scrape_news(limit: int = 15) -> list[dict[str, Any]]:
     cached = load_cached_news()
     scraped: list[dict[str, Any]] = []
     seen: set[str] = set()
+    pages_ok = 0
 
     page_urls = [NEWS_URL] + [
-        urljoin(BASE_URL + "/", f"novosti/p/{i}") for i in range(1, 5)
+        urljoin(BASE_URL + "/", f"novosti/p/{i}") for i in range(1, 6)
     ]
 
     for page_url in page_urls:
         soup = _fetch_soup(page_url)
         if not soup:
             continue
-        for item in _parse_news_wrap(soup):
+        pages_ok += 1
+        for item in _parse_page(soup):
             u = item.get("url") or ""
             if u and u not in seen:
                 seen.add(u)
@@ -242,18 +317,18 @@ def scrape_news(limit: int = 15) -> list[dict[str, Any]]:
             break
 
     if not scraped:
-        print("[news] scrape empty, using cache")
-        # Still refresh meta timestamp so clients know we tried
-        if cached:
-            save_meta(cached)
+        print(f"[news] scrape empty (pages_ok={pages_ok}), keeping cache ({len(cached)})")
+        save_meta(cached, ok=False, error="empty_scrape")
         return _sorted(cached)[:limit]
 
+    # Guard: if scrape returned suspiciously few brand-new items and cache is rich,
+    # still merge (never replace wholesale with a tiny partial set alone).
     merged = _merge_news(scraped, cached)
     merged = merged[:80]
     save_news_cache(merged)
-    save_meta(merged)
+    save_meta(merged, ok=True)
     print(
-        f"[news] scraped={len(scraped)} merged={len(merged)} "
+        f"[news] scraped={len(scraped)} pages_ok={pages_ok} merged={len(merged)} "
         f"-> return {min(limit, len(merged))} top={merged[0].get('date')} {merged[0].get('title', '')[:50]}"
     )
     return merged[:limit]
@@ -271,6 +346,7 @@ def get_news_fast(limit: int = 15, force: bool = False) -> list[dict[str, Any]]:
         return scrape_news(limit)
     except Exception as exc:
         print(f"[news] get_news_fast scrape failed: {exc}")
+        save_meta(cached, ok=False, error=str(exc)[:200])
         return _sorted(cached)[:limit]
 
 
@@ -287,6 +363,14 @@ def news_updates_payload() -> dict[str, Any]:
             print(f"[news] news_updates scrape failed: {exc}")
             news = load_cached_news()
             meta = load_meta()
+    # Stale cache: kick a scrape if last success is old (client polls this often)
+    age = cache_age_seconds()
+    if news and age > 120:
+        try:
+            news = scrape_news(10)
+            meta = load_meta()
+        except Exception as exc:
+            print(f"[news] news_updates refresh failed: {exc}")
     top = news[0] if news else {}
     fp = meta.get("fingerprint") or fingerprint_for(news)
     return {
@@ -297,6 +381,8 @@ def news_updates_payload() -> dict[str, Any]:
         "latestUrl": meta.get("latest_url") or top.get("url") or "",
         "count": len(news),
         "updatedAt": meta.get("last_scrape_ts"),
+        "lastOk": meta.get("last_ok", True),
+        "cacheAgeSec": int(age) if news else None,
     }
 
 
