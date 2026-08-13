@@ -1,7 +1,7 @@
 import os
 import io
+import hmac
 import json
-import secrets
 import shutil
 import tempfile
 import zipfile
@@ -77,7 +77,14 @@ app.add_middleware(
 
 
 def verify_admin_password(password: str) -> None:
-    if not password or not secrets.compare_digest(password, ADMIN_PASSWORD):
+    """
+    Constant-time password check.
+    Use UTF-8 bytes — secrets.compare_digest(str, str) crashes on non-ASCII
+    (TypeError → bare "Internal Server Error" in the admin UI).
+    """
+    expected = (ADMIN_PASSWORD or "").encode("utf-8")
+    provided = (password or "").encode("utf-8")
+    if not expected or not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=401, detail="Invalid admin password")
 
 
@@ -920,6 +927,16 @@ function formatValidation(v) {
   return h;
 }
 
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    const short = (text || '').slice(0, 180).replace(/</g, '&lt;');
+    throw new Error('Сервер вернул не JSON (HTTP ' + res.status + '): ' + short);
+  }
+}
+
 async function validateOne(c) {
   if (!ensurePw()) return;
   const f = document.getElementById('file' + c).files[0];
@@ -931,7 +948,7 @@ async function validateOne(c) {
   fd.append('course', c);
   try {
     const res = await fetch('/admin/validate', { method: 'POST', body: fd });
-    const data = await res.json();
+    const data = await readJson(res);
     if (!res.ok) {
       showReport(c, '<span class="err">' + (data.detail || res.status) + '</span>', 'err');
       state[c].validation = null;
@@ -941,7 +958,7 @@ async function validateOne(c) {
     state[c].file = f;
     showReport(c, formatValidation(data), data.ok ? 'ok' : 'err');
   } catch (e) {
-    showReport(c, '<span class="err">Сеть: ' + e + '</span>', 'err');
+    showReport(c, '<span class="err">Ошибка: ' + e.message + '</span>', 'err');
   }
 }
 
@@ -965,7 +982,7 @@ async function publishOne(c, force) {
   if (force) fd.append('skip_validate', 'true');
   try {
     const res = await fetch('/admin/upload', { method: 'POST', body: fd });
-    const data = await res.json();
+    const data = await readJson(res);
     if (res.ok) {
       let h = `<div class="ok"><b>Опубликовано</b> · групп: ${data.groups_count}, пар: ${data.lessons_count}</div>`;
       if (data.validation) h += formatValidation(data.validation);
@@ -978,7 +995,7 @@ async function publishOne(c, force) {
       showReport(c, '<span class="err">Ошибка публикации</span><br>' + msg, 'err');
     }
   } catch (e) {
-    showReport(c, '<span class="err">Сеть: ' + e + '</span>', 'err');
+    showReport(c, '<span class="err">Ошибка: ' + e.message + '</span>', 'err');
   }
 }
 
