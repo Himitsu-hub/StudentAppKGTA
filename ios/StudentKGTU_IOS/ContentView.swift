@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var prefs: UserPreferences
     @EnvironmentObject private var theme: ThemeManager
+    @EnvironmentObject private var deepLink: AppDeepLink
     @State private var path = NavigationPath()
 
     var body: some View {
@@ -26,6 +27,20 @@ struct ContentView: View {
                             }
                         }
                 }
+                .onChange(of: deepLink.pendingRoute) { _, route in
+                    guard let route else { return }
+                    // Reset stack then push target (from notification tap)
+                    path = NavigationPath()
+                    path.append(route)
+                    deepLink.consume()
+                }
+                .onAppear {
+                    if let route = deepLink.pendingRoute {
+                        path = NavigationPath()
+                        path.append(route)
+                        deepLink.consume()
+                    }
+                }
             } else {
                 OnboardingView()
             }
@@ -41,4 +56,5 @@ struct ContentView: View {
         .environmentObject(ThemeManager.shared)
         .environmentObject(RemindersStore.shared)
         .environmentObject(ScheduleSessionCache.shared)
+        .environmentObject(AppDeepLink.shared)
 }

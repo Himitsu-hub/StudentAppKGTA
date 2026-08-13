@@ -14,12 +14,14 @@ object ScheduleUpdateNotifier {
 
     fun show(context: Context, course: Int) {
         val open = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_OPEN_ROUTE, MainActivity.ROUTE_SCHEDULE)
             putExtra(EXTRA_OPEN_SCHEDULE, true)
+            putExtra(EXTRA_COURSE, course)
         }
         val pending = PendingIntent.getActivity(
             context,
-            0,
+            NOTIFICATION_ID + course,
             open,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -44,4 +46,5 @@ object ScheduleUpdateNotifier {
     }
 
     const val EXTRA_OPEN_SCHEDULE = "open_schedule"
+    const val EXTRA_COURSE = "course"
 }

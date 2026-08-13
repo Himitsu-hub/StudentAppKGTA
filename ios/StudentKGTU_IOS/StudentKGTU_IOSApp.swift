@@ -1,5 +1,6 @@
 import SwiftUI
 import BackgroundTasks
+import UserNotifications
 
 @main
 struct StudentKGTU_IOSApp: App {
@@ -8,10 +9,12 @@ struct StudentKGTU_IOSApp: App {
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var reminders = RemindersStore.shared
     @StateObject private var scheduleCache = ScheduleSessionCache.shared
+    @StateObject private var deepLink = AppDeepLink.shared
 
     init() {
         // Start path monitor early for offline-first loads
         _ = NetworkMonitor.shared
+        UNUserNotificationCenter.current().delegate = AppNotificationDelegate.shared
         ScheduleUpdateChecker.registerBackgroundTask()
         NewsUpdateChecker.registerBackgroundTask()
     }
@@ -23,6 +26,7 @@ struct StudentKGTU_IOSApp: App {
                 .environmentObject(theme)
                 .environmentObject(reminders)
                 .environmentObject(scheduleCache)
+                .environmentObject(deepLink)
                 .task {
                     ScheduleUpdateChecker.scheduleNextBackground()
                     NewsUpdateChecker.scheduleNextBackground()

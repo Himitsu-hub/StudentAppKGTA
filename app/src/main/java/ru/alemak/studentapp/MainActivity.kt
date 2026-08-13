@@ -1,6 +1,7 @@
 package ru.alemak.studentapp
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -35,6 +36,7 @@ import ru.alemak.studentapp.ui.navigation.AppNavigation
 import ru.alemak.studentapp.ui.navigation.ThemeViewModel
 import ru.alemak.studentapp.ui.theme.StudentAppTheme
 import ru.alemak.studentapp.ui.theme.ThemePrefs
+import ru.alemak.studentapp.updates.NewsUpdateScheduler
 import ru.alemak.studentapp.updates.ScheduleUpdateScheduler
 import ru.alemak.studentapp.widget.ScheduleWidgetUpdater
 
@@ -50,7 +52,11 @@ class MainActivity : ComponentActivity() {
     /** Hold system splash until Compose shows the same logo+name screen. */
     private val keepSplash = AtomicBoolean(true)
 
+    /** Deep-link from notification: reminders / schedule / … */
+    private val openRouteState = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        openRouteState.value = intent?.getStringExtra(EXTRA_OPEN_ROUTE)
         val dark = ThemePrefs.isDark(this)
         val bgColor = if (dark) 0xFF0A1020.toInt() else 0xFF1A336C.toInt()
 
@@ -85,12 +91,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         ensureNotificationPermission()
         ScheduleUpdateScheduler.schedule(this)
+        NewsUpdateScheduler.schedule(this)
         widgetUpdater.updateAsync()
 
         setContent {
             val themeViewModel: ThemeViewModel = hiltViewModel()
             val darkCompose by themeViewModel.darkTheme.collectAsStateWithLifecycle()
             val prefsReady by themeViewModel.prefsReady.collectAsStateWithLifecycle()
+            val openRoute by openRouteState
 
             val splashDark = remember { dark }
             var showBrandSplash by remember { mutableStateOf(true) }
@@ -114,7 +122,11 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize(),
                             color = if (darkCompose) Color(0xFF0A1020) else Color(0xFF1A336C),
                         ) {
-                            AppNavigation(themeViewModel = themeViewModel)
+                            AppNavigation(
+                                themeViewModel = themeViewModel,
+                                openRoute = openRoute,
+                                onOpenRouteConsumed = { openRouteState.value = null },
+                            )
                         }
                     }
 
@@ -129,6 +141,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openRouteState.value = intent.getStringExtra(EXTRA_OPEN_ROUTE)
+    }
+
     private fun ensureNotificationPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         val granted = ContextCompat.checkSelfPermission(
@@ -138,5 +156,13 @@ class MainActivity : ComponentActivity() {
         if (!granted) {
             requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_ROUTE = "open_route"
+        const val ROUTE_REMINDERS = "reminders"
+        const val ROUTE_SCHEDULE = "schedule"
+        const val ROUTE_CAMPUS = "campus"
+        const val ROUTE_TEACHERS = "teachers"
     }
 }

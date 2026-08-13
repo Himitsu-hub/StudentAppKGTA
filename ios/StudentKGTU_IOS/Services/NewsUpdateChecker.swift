@@ -69,6 +69,8 @@ enum NewsUpdateChecker {
             content.body = "\(date) · \(title)"
         }
         content.sound = .default
+        content.userInfo = ["route": "news"]
+        content.categoryIdentifier = "news"
         let req = UNNotificationRequest(
             identifier: "news-update-\(Date().timeIntervalSince1970)",
             content: content,

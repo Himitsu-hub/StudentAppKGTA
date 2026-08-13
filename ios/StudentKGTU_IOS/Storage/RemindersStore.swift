@@ -62,6 +62,9 @@ final class RemindersStore: ObservableObject {
         content.title = "Напоминание"
         content.body = text
         content.sound = .default
+        // Deep-link: tap opens Reminders tab
+        content.userInfo = ["route": "reminders"]
+        content.categoryIdentifier = "reminders"
         let date = Date(timeIntervalSince1970: millis / 1000)
         guard date > Date() else { return }
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)

@@ -2,6 +2,7 @@ package ru.alemak.studentapp.ui.navigation
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -33,6 +34,8 @@ object Routes {
 @Composable
 fun AppNavigation(
     themeViewModel: ThemeViewModel = hiltViewModel(),
+    openRoute: String? = null,
+    onOpenRouteConsumed: () -> Unit = {},
 ) {
     val prefsReady by themeViewModel.prefsReady.collectAsStateWithLifecycle()
     val onboardingDone by themeViewModel.onboardingDone.collectAsStateWithLifecycle()
@@ -43,6 +46,24 @@ fun AppNavigation(
     if (!prefsReady) return
 
     val startDest = if (onboardingDone) Routes.HOME else Routes.ONBOARDING
+
+    // Notification deep-link: open Reminders / Schedule after home is ready
+    LaunchedEffect(openRoute, onboardingDone) {
+        if (!onboardingDone) return@LaunchedEffect
+        val route = when (openRoute) {
+            "reminders" -> Routes.REMINDERS
+            "schedule" -> Routes.SCHEDULE
+            "campus" -> Routes.CAMPUS
+            "teachers" -> Routes.TEACHERS
+            else -> null
+        }
+        if (route != null) {
+            navController.navigate(route) {
+                launchSingleTop = true
+            }
+            onOpenRouteConsumed()
+        }
+    }
 
     NavHost(navController = navController, startDestination = startDest) {
         composable(Routes.ONBOARDING) {

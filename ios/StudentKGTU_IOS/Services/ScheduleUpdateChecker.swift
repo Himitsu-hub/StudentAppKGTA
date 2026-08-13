@@ -66,6 +66,8 @@ enum ScheduleUpdateChecker {
         content.title = "Расписание обновлено"
         content.body = "На сервере новое расписание для \(course) курса. Откройте приложение."
         content.sound = .default
+        content.userInfo = ["route": "schedule", "course": course]
+        content.categoryIdentifier = "schedule"
         let req = UNNotificationRequest(
             identifier: "schedule-update-\(course)-\(Date().timeIntervalSince1970)",
             content: content,
