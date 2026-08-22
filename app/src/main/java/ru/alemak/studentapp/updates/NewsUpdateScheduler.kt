@@ -13,11 +13,16 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * Fast poll for news fingerprint (~2 min) so local notifications feel near-real-time.
- * Schedule Excel checks stay on the slower ScheduleUpdateScheduler.
+ * Polls news fingerprint so local notifications feel near-real-time.
+ *
+ * Uses [AlarmManager.setExactAndAllowWhileIdle] (not inexact
+ * setAndAllowWhileIdle) — otherwise Doze batches polls to ≥9–15 minutes
+ * and users only see news when they open the app.
+ *
+ * WorkManager ([NewsUpdateWorker]) is a backup when exact alarms are deferred.
  */
 object NewsUpdateScheduler {
-    /** How often the app asks: «есть ли новая новость?» */
+    /** Target interval while the device is awake / recently used. */
     const val INTERVAL_MS: Long = 2 * 60 * 1000L // 2 minutes
 
     private const val REQUEST_CODE = 77211
@@ -25,6 +30,7 @@ object NewsUpdateScheduler {
 
     fun schedule(context: Context) {
         val app = context.applicationContext
+        NewsUpdateWorker.enqueue(app)
         scheduleNext(app)
         scope.launch {
             try {
@@ -40,13 +46,33 @@ object NewsUpdateScheduler {
         val am = app.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = pendingIntent(app)
         val triggerAt = SystemClock.elapsedRealtime() + INTERVAL_MS
+
+        // Prefer exact alarms so Doze does not stretch a "2 min" poll into 15+.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerAt,
+                    pi,
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                am.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
+            }
+            return
+        } catch (_: SecurityException) {
+            // No SCHEDULE_EXACT_ALARM — fall through
+        } catch (_: Exception) {
+            // fall through
+        }
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
             } else {
                 am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
             }
-        } catch (_: SecurityException) {
+        } catch (_: Exception) {
             am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
         }
     }

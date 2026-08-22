@@ -14,8 +14,8 @@ android {
         applicationId = "ru.alemak.studentapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 69
-        versionName = "2.3.44"
+        versionCode = 70
+        versionName = "2.3.45"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -75,6 +75,8 @@ dependencies {
     implementation(libs.lifecycle.runtime)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.lifecycle.process)
+    implementation(libs.work.runtime)
     implementation(libs.activity.compose)
 
     implementation(platform(libs.compose.bom))

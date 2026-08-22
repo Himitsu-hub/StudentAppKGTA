@@ -7,6 +7,7 @@ import android.content.Context
 import android.os.Build
 import dagger.hilt.android.HiltAndroidApp
 import ru.alemak.studentapp.ui.theme.ThemePrefs
+import ru.alemak.studentapp.updates.NewsForegroundPoller
 import ru.alemak.studentapp.updates.NewsUpdateScheduler
 import ru.alemak.studentapp.updates.ScheduleUpdateScheduler
 
@@ -25,8 +26,9 @@ class StudentApp : Application() {
         createScheduleUpdatesChannel()
         createNewsUpdatesChannel()
         ScheduleUpdateScheduler.schedule(this)
-        // Faster news fingerprint poll (~2 min) for near-real-time local notifications
+        // Exact AlarmManager (~2 min) + WorkManager backup + foreground 30s poll
         NewsUpdateScheduler.schedule(this)
+        NewsForegroundPoller.start(this)
     }
 
     private fun createReminderChannel() {

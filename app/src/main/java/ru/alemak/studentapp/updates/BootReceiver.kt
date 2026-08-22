@@ -20,6 +20,6 @@ class BootReceiver : BroadcastReceiver() {
         }
         val app = context.applicationContext
         ScheduleUpdateScheduler.schedule(app)
-        NewsUpdateScheduler.schedule(app)
+        NewsUpdateScheduler.schedule(app) // also re-enqueues WorkManager backup
     }
 }

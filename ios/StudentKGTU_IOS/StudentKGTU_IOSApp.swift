@@ -35,22 +35,29 @@ struct StudentKGTU_IOSApp: App {
                     await WidgetUpdater.updateNow()
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    // When user returns / app is active — check news + schedule immediately
-                    guard phase == .active else { return }
-                    Task {
-                        NewsUpdateChecker.scheduleNextBackground()
+                    switch phase {
+                    case .active:
+                        Task {
+                            NewsUpdateChecker.scheduleNextBackground()
+                            ScheduleUpdateChecker.scheduleNextBackground()
+                            _ = await NewsUpdateChecker.check(notify: true)
+                            _ = await ScheduleUpdateChecker.check(notify: true)
+                        }
+                    case .background, .inactive:
+                        // Re-arm BG refresh + one last poll while still allowed
+                        NewsUpdateChecker.checkOnEnterBackground()
                         ScheduleUpdateChecker.scheduleNextBackground()
-                        _ = await NewsUpdateChecker.check(notify: true)
-                        _ = await ScheduleUpdateChecker.check(notify: true)
+                    @unknown default:
+                        break
                     }
                 }
-                // Fast foreground poll while app is open (~45s) — schedule updates feel near-instant
+                // Foreground poll ~20s while app is open — news feel near-instant
                 .task {
                     while !Task.isCancelled {
-                        try? await Task.sleep(nanoseconds: 45 * 1_000_000_000)
+                        try? await Task.sleep(nanoseconds: 20 * 1_000_000_000)
                         guard scenePhase == .active else { continue }
-                        _ = await ScheduleUpdateChecker.check(notify: true)
                         _ = await NewsUpdateChecker.check(notify: true)
+                        _ = await ScheduleUpdateChecker.check(notify: true)
                     }
                 }
         }

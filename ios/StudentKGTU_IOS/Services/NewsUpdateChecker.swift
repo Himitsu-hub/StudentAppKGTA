@@ -1,8 +1,15 @@
 import Foundation
+import UIKit
 import UserNotifications
 import BackgroundTasks
 
 /// Polls /api/news-updates and posts a local notification when the feed fingerprint changes.
+///
+/// Without APNs, iOS will not deliver true push while the app is force-quit.
+/// We maximize chances with:
+/// - BGAppRefresh asked as soon as possible (~2 min earliest)
+/// - a brief `beginBackgroundTask` check when leaving foreground
+/// - aggressive foreground polling while the app is open
 enum NewsUpdateChecker {
     static let bgTaskId = "Univers.StudentKGTU-IOS.news-update"
     private static let versionKey = "news_feed_version_v1"
@@ -49,7 +56,7 @@ enum NewsUpdateChecker {
     private static func fetchUpdates() async throws -> UpdatesResponse? {
         guard let url = URL(string: "https://apistudentkgtu.ru/api/news-updates") else { return nil }
         var req = URLRequest(url: url)
-        req.timeoutInterval = 15
+        req.timeoutInterval = 12
         req.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: req)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
@@ -85,19 +92,48 @@ enum NewsUpdateChecker {
                 task.setTaskCompleted(success: false)
                 return
             }
+            // Always re-arm before work — if we expire, next refresh is still queued
             scheduleNextBackground()
             let work = Task {
                 _ = await check(notify: true)
+                scheduleNextBackground()
                 task.setTaskCompleted(success: true)
             }
-            task.expirationHandler = { work.cancel() }
+            task.expirationHandler = {
+                work.cancel()
+                scheduleNextBackground()
+            }
         }
     }
 
     static func scheduleNextBackground() {
         let req = BGAppRefreshTaskRequest(identifier: bgTaskId)
-        // Ask iOS for ~5 min; system may delay, but sooner is better for news.
-        req.earliestBeginDate = Date(timeIntervalSinceNow: 5 * 60)
-        try? BGTaskScheduler.shared.submit(req)
+        // Ask ASAP; iOS may still delay, but 2 min is better than 5–15+
+        req.earliestBeginDate = Date(timeIntervalSinceNow: 2 * 60)
+        do {
+            try BGTaskScheduler.shared.submit(req)
+        } catch {
+            // Duplicate submit is fine — ignore
+        }
+    }
+
+    /// Run one network check while iOS still grants a short background execution window.
+    static func checkOnEnterBackground() {
+        scheduleNextBackground()
+        var bgTaskId = UIBackgroundTaskIdentifier.invalid
+        bgTaskId = UIApplication.shared.beginBackgroundTask(withName: "news-update-check") {
+            if bgTaskId != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTaskId)
+                bgTaskId = .invalid
+            }
+        }
+        Task {
+            _ = await check(notify: true)
+            scheduleNextBackground()
+            if bgTaskId != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTaskId)
+                bgTaskId = .invalid
+            }
+        }
     }
 }

@@ -41,13 +41,27 @@ object ScheduleUpdateScheduler {
         val pi = pendingIntent(app)
 
         val triggerAt = SystemClock.elapsedRealtime() + INTERVAL_MS
+        // Exact so Doze does not stretch the 1-min poll into 9–15+ minutes
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
+            } else {
+                @Suppress("DEPRECATION")
+                am.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
+            }
+            return
+        } catch (_: SecurityException) {
+            // fall through
+        } catch (_: Exception) {
+            // fall through
+        }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
             } else {
                 am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
             }
-        } catch (_: SecurityException) {
+        } catch (_: Exception) {
             am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
         }
     }
