@@ -1,12 +1,12 @@
 {
-  "last_scrape_ts": 1786662919.4791539,
-  "last_attempt_ts": 1786662919.4791539,
+  "last_scrape_ts": 1787511702.501258,
+  "last_attempt_ts": 1787511702.501258,
   "last_ok": true,
   "last_error": "",
-  "fingerprint": "366dc6a2f6730029b74792f2",
-  "latest_url": "https://dksta.ru/novosti/news_post/leto-s-polzoj",
-  "latest_title": "Лето с пользой!",
-  "latest_date": "12.08.2026",
-  "count": 22,
+  "fingerprint": "0a82bc4e6a37e848b82a8dba",
+  "latest_url": "https://dksta.ru/novosti/news_post/s-dnem-flaga-rossijskoj-federacii",
+  "latest_title": "С Днём флага Российской Федерации!",
+  "latest_date": "22.08.2026",
+  "count": 28,
   "fail_streak": 0
 }

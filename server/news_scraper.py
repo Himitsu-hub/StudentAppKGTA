@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import threading
 import time
 from datetime import datetime
 from typing import Any
@@ -26,7 +27,11 @@ CACHE_PATH = os.path.join(os.path.dirname(__file__), "news_cache.json")
 META_PATH = os.path.join(os.path.dirname(__file__), "news_meta.json")
 
 # Warm cache window for /api/news (background loop is the source of truth).
-FRESH_SECONDS = 45
+FRESH_SECONDS = 60
+
+# Only one live scrape at a time — concurrent force=true used to wedge the API.
+_scrape_lock = threading.Lock()
+_bg_scrape_pending = False
 
 HEADERS = {
     "User-Agent": (
@@ -193,9 +198,10 @@ def _parse_page(soup: BeautifulSoup) -> list[dict[str, Any]]:
     return primary
 
 
-def _fetch_soup(url: str, timeout: int = 18) -> BeautifulSoup | None:
+def _fetch_soup(url: str, timeout: int = 8) -> BeautifulSoup | None:
+    """Short timeouts — never block API workers for minutes on a slow dksta.ru."""
     last_err: Exception | None = None
-    for attempt in range(4):
+    for attempt in range(2):
         try:
             resp = requests.get(url, headers=HEADERS, timeout=timeout)
             resp.raise_for_status()
@@ -205,7 +211,7 @@ def _fetch_soup(url: str, timeout: int = 18) -> BeautifulSoup | None:
             return BeautifulSoup(resp.text, "html.parser")
         except Exception as exc:
             last_err = exc
-            time.sleep(0.5 * (attempt + 1))
+            time.sleep(0.35 * (attempt + 1))
     print(f"[news] fetch failed {url}: {last_err}")
     return None
 
@@ -291,16 +297,23 @@ def cache_age_seconds() -> float:
 def scrape_news(limit: int = 15) -> list[dict[str, Any]]:
     """
     Return freshest news.
-    Scrapes homepage + listing pages, merges into cache so partial scrapes
-    never wipe newer posts permanently.
+    Scrapes homepage + a couple of listing pages, merges into cache so partial
+    scrapes never wipe newer posts permanently.
+    Serialized via _scrape_lock so concurrent API polls cannot stack scrapes.
     """
+    with _scrape_lock:
+        return _scrape_news_unlocked(limit)
+
+
+def _scrape_news_unlocked(limit: int = 15) -> list[dict[str, Any]]:
     cached = load_cached_news()
     scraped: list[dict[str, Any]] = []
     seen: set[str] = set()
     pages_ok = 0
 
+    # Homepage usually has the newest posts; 2 listing pages is enough.
     page_urls = [NEWS_URL] + [
-        urljoin(BASE_URL + "/", f"novosti/p/{i}") for i in range(1, 6)
+        urljoin(BASE_URL + "/", f"novosti/p/{i}") for i in range(1, 3)
     ]
 
     for page_url in page_urls:
@@ -321,8 +334,6 @@ def scrape_news(limit: int = 15) -> list[dict[str, Any]]:
         save_meta(cached, ok=False, error="empty_scrape")
         return _sorted(cached)[:limit]
 
-    # Guard: if scrape returned suspiciously few brand-new items and cache is rich,
-    # still merge (never replace wholesale with a tiny partial set alone).
     merged = _merge_news(scraped, cached)
     merged = merged[:80]
     save_news_cache(merged)
@@ -334,43 +345,56 @@ def scrape_news(limit: int = 15) -> list[dict[str, Any]]:
     return merged[:limit]
 
 
+def request_background_scrape(limit: int = 20) -> None:
+    """Kick a non-blocking scrape (coalesce concurrent requests into one)."""
+    global _bg_scrape_pending
+    if _bg_scrape_pending:
+        return
+    _bg_scrape_pending = True
+
+    def worker() -> None:
+        global _bg_scrape_pending
+        try:
+            scrape_news(limit)
+        except Exception as exc:
+            print(f"[news] background scrape failed: {exc}")
+        finally:
+            _bg_scrape_pending = False
+
+    threading.Thread(target=worker, daemon=True, name="news-scrape-bg").start()
+
+
 def get_news_fast(limit: int = 15, force: bool = False) -> list[dict[str, Any]]:
     """
-    Prefer warm cache if recently scraped; otherwise live scrape.
-    Keeps /api/news responsive while background loop keeps data fresh.
+    Always prefer returning cache immediately so /api/news never wedges workers.
+    force=true / stale cache only schedules a background scrape.
+    Cold start (empty cache) does one short live scrape.
     """
     cached = load_cached_news()
-    if not force and cached and cache_age_seconds() < FRESH_SECONDS:
+    age = cache_age_seconds()
+    if cached:
+        if force or age >= FRESH_SECONDS:
+            request_background_scrape(max(limit, 20))
         return _sorted(cached)[:limit]
+    # No cache yet — must scrape once (still serialized + short timeouts)
     try:
         return scrape_news(limit)
     except Exception as exc:
-        print(f"[news] get_news_fast scrape failed: {exc}")
-        save_meta(cached, ok=False, error=str(exc)[:200])
-        return _sorted(cached)[:limit]
+        print(f"[news] get_news_fast cold scrape failed: {exc}")
+        save_meta([], ok=False, error=str(exc)[:200])
+        return []
 
 
 def news_updates_payload() -> dict[str, Any]:
-    """Lightweight poll payload for clients (push-style local notifications)."""
+    """Lightweight poll payload — never scrapes on the request thread."""
     news = load_cached_news()
     meta = load_meta()
-    # If meta missing or cache empty, try a scrape
-    if not news or not meta.get("fingerprint"):
-        try:
-            news = scrape_news(10)
-            meta = load_meta()
-        except Exception as exc:
-            print(f"[news] news_updates scrape failed: {exc}")
-            news = load_cached_news()
-            meta = load_meta()
-    # Stale cache: kick a scrape if last success is old (client polls this often)
     age = cache_age_seconds()
-    if news and age > 120:
-        try:
-            news = scrape_news(10)
-            meta = load_meta()
-        except Exception as exc:
-            print(f"[news] news_updates refresh failed: {exc}")
+    if not news or not meta.get("fingerprint") or age > 90:
+        request_background_scrape(20)
+        news = load_cached_news()
+        meta = load_meta()
+        age = cache_age_seconds()
     top = news[0] if news else {}
     fp = meta.get("fingerprint") or fingerprint_for(news)
     return {

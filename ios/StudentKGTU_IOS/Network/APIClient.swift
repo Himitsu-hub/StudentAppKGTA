@@ -28,8 +28,9 @@ actor APIClient {
         // NEVER waitsForConnectivity — that hangs for minutes in airplane mode.
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = false
-        config.timeoutIntervalForRequest = 20
-        config.timeoutIntervalForResource = 40
+        // Fail fast on wedged API so pull-to-refresh falls back to cache quickly
+        config.timeoutIntervalForRequest = 12
+        config.timeoutIntervalForResource = 20
         config.httpMaximumConnectionsPerHost = 4
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.allowsExpensiveNetworkAccess = true
@@ -121,7 +122,7 @@ actor APIClient {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("StudentKGTU-iOS", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 20
+        request.timeoutInterval = 12
 
         do {
             let (data, response) = try await session.data(for: request)

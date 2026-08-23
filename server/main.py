@@ -242,12 +242,12 @@ def get_teachers():
 @app.get("/api/news")
 def get_news(
     limit: int = Query(15, ge=1, le=50),
-    force: bool = Query(False, description="Force live scrape even if cache is warm"),
+    force: bool = Query(False, description="Ask background scrape; response still from cache"),
 ):
     """
     News from dksta.ru (merged cache).
-    Warm cache is returned instantly; background loop keeps it fresh every ~5 min.
-    Pass force=true to scrape on this request.
+    Always returns cache immediately — never blocks on live scrape.
+    force=true schedules a background refresh; loop also refreshes ~every 90s.
     """
     from news_scraper import get_news_fast, load_cached_news
 

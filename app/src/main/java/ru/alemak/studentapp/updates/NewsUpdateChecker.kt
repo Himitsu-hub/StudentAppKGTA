@@ -51,8 +51,9 @@ object NewsUpdateChecker {
 
     private fun fetchUpdates(): NewsUpdatesDto? {
         val client = OkHttpClient.Builder()
-            .connectTimeout(45, TimeUnit.SECONDS)
-            .readTimeout(45, TimeUnit.SECONDS)
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .callTimeout(12, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
         val base = BuildConfig.BASE_URL.trimEnd('/') + "/"

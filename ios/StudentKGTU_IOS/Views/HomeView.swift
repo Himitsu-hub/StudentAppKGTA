@@ -130,11 +130,11 @@ struct HomeView: View {
             guard !didInitialLoad else { return }
             didInitialLoad = true
             await refresh(showLoading: true)
-            // Poll news every ~90s while home is open + notify on new posts
+            // Poll news every ~60s while home is open (server keeps cache fresh)
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 90 * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
                 if NetworkMonitor.shared.isOnline {
-                    let meta = await loadNews(force: true)
+                    let meta = await loadNews(force: false)
                     if meta.updatedAt > 0 {
                         updatedLabel = TimeFormat.updatedAtLabel(millis: meta.updatedAt) ?? updatedLabel
                     }
@@ -175,6 +175,14 @@ struct HomeView: View {
                     pullDistance = pullThreshold
                     Task {
                         await refresh(showLoading: false)
+                        // Server kicks background scrape on force=true; one more pass picks it up
+                        try? await Task.sleep(nanoseconds: 1_200_000_000)
+                        _ = await loadNews(force: false)
+                        if let label = TimeFormat.updatedAtLabel(
+                            millis: NewsRepository.shared.getNewsFromCacheOnly(limit: 1).updatedAt
+                        ) {
+                            updatedLabel = label
+                        }
                         _ = await NewsUpdateChecker.check(notify: false)
                         await MainActor.run {
                             withAnimation(.easeOut(duration: 0.2)) {

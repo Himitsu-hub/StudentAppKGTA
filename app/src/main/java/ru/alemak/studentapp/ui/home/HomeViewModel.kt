@@ -104,7 +104,8 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadNewsOnly() {
         try {
-            val result = newsRepository.getNews(limit = 15, force = true)
+            // force=false: warm cache from API (server scrapes in background)
+            val result = newsRepository.getNews(limit = 15, force = false)
             _uiState.update {
                 it.copy(
                     news = result.news,
@@ -155,7 +156,10 @@ class HomeViewModel @Inject constructor(
                 val lessonJob = async { loadNextLesson() }
                 val newsJob = async { loadNews() }
                 val lessonMeta = lessonJob.await()
-                val newsMeta = newsJob.await()
+                var newsMeta = newsJob.await()
+                // force=true only schedules server scrape; brief second pass picks up new posts
+                delay(1_200L)
+                newsMeta = loadNews()
                 val latest = listOfNotNull(lessonMeta.updatedAt, newsMeta.updatedAt)
                     .filter { it > 0L }
                     .maxOrNull() ?: 0L
