@@ -297,6 +297,34 @@ def clean_subject(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip(" .\t")
 
 
+def is_schedule_footer_junk(text: str) -> bool:
+    """
+    Excel footers often bleed into the last Saturday cells, e.g.
+    «Составил: ведущий инженер УМУ Жарикова Т.П.» — not a real lesson.
+    """
+    if not text or not text.strip():
+        return False
+    t = text.lower().replace("\n", " ")
+    t = re.sub(r"\s+", " ", t)
+    markers = (
+        "составил",
+        "составила",
+        "составили",
+        "ведущий инженер уму",
+        "начальник уму",
+        "утверждаю",
+        "согласовано",
+        "согласовал",
+        "согласовала",
+    )
+    if any(m in t for m in markers):
+        return True
+    # Signature-only: surname + initials, no subject words, often under «составил»
+    if re.search(r"жариков", t):
+        return True
+    return False
+
+
 _ONLINE_RE = re.compile(r"онлайн|дистанц(?:ионн\w*)?|в\s*сдо|\bzoom\b|\bteams\b", re.I)
 
 
@@ -351,12 +379,17 @@ def _room_token_from_line(line: str) -> Optional[str]:
 
 
 def parse_lesson_text(text: str, time: str) -> Optional[Lesson]:
+    if is_schedule_footer_junk(text):
+        return None
+
     lines = [line.strip() for line in text.replace("\r", "\n").split("\n") if line.strip()]
     if not lines:
         return None
 
     subject = clean_subject(lines[0])
     if not subject or subject in ("-", "null"):
+        return None
+    if is_schedule_footer_junk(subject):
         return None
 
     lesson_type = "занятие"
