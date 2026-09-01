@@ -10,10 +10,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.alemak.studentapp.data.local.UserPreferences
+import ru.alemak.studentapp.data.model.FacultyCatalog
 import ru.alemak.studentapp.data.repository.ScheduleRepository
 import ru.alemak.studentapp.widget.ScheduleWidgetUpdater
 
 data class OnboardingUiState(
+    val faculty: String = FacultyCatalog.FAE,
     val course: Int = 1,
     val group: String? = null,
     val subgroup: String? = null,
@@ -35,6 +37,21 @@ class OnboardingViewModel @Inject constructor(
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
 
     init {
+        reloadGroups()
+    }
+
+    fun selectFaculty(faculty: String) {
+        val fid = FacultyCatalog.normalize(faculty)
+        _uiState.update {
+            it.copy(
+                faculty = fid,
+                course = 1,
+                group = null,
+                subgroup = null,
+                canFinish = false,
+                error = null,
+            )
+        }
         reloadGroups()
     }
 
@@ -79,15 +96,19 @@ class OnboardingViewModel @Inject constructor(
 
     fun reloadGroups() {
         viewModelScope.launch {
-            val course = _uiState.value.course
+            val s = _uiState.value
             _uiState.update { it.copy(loadingGroups = true, error = null) }
             try {
-                val groups = scheduleRepository.getGroups(course)
+                val groups = scheduleRepository.getGroups(s.faculty, s.course)
                 _uiState.update {
                     it.copy(
                         groups = groups,
                         loadingGroups = false,
-                        error = if (groups.isEmpty()) "Нет групп для $course курса на сервере" else null,
+                        error = if (groups.isEmpty()) {
+                            "Нет групп для ${FacultyCatalog.shortName(s.faculty)}, ${s.course} курса"
+                        } else {
+                            null
+                        },
                     )
                 }
             } catch (e: Exception) {
@@ -107,7 +128,7 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(saving = true) }
             try {
-                userPreferences.save(s.course, group, s.subgroup)
+                userPreferences.save(s.faculty, s.course, group, s.subgroup)
                 userPreferences.setOnboardingDone(true)
                 widgetUpdater.updateAsync()
                 _uiState.update { it.copy(saving = false) }

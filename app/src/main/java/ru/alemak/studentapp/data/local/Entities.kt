@@ -20,7 +20,10 @@ data class ScheduleCacheEntity(
 
 @Entity(tableName = "cached_groups")
 data class GroupsCacheEntity(
-    @PrimaryKey val course: Int,
+    /** "$faculty_$course" — multi-faculty safe key */
+    @PrimaryKey val cacheKey: String,
+    val faculty: String = "fae",
+    val course: Int,
     val groups: Map<String, List<String>>,
     val updatedAt: Long = System.currentTimeMillis(),
 )

@@ -1,12 +1,12 @@
 {
-  "last_scrape_ts": 1787511702.501258,
-  "last_attempt_ts": 1787511702.501258,
+  "last_scrape_ts": 1788037539.2038789,
+  "last_attempt_ts": 1788037539.2038789,
   "last_ok": true,
   "last_error": "",
-  "fingerprint": "0a82bc4e6a37e848b82a8dba",
-  "latest_url": "https://dksta.ru/novosti/news_post/s-dnem-flaga-rossijskoj-federacii",
-  "latest_title": "С Днём флага Российской Федерации!",
-  "latest_date": "22.08.2026",
-  "count": 28,
+  "fingerprint": "7577c7c8a68bd172a3801bb1",
+  "latest_url": "https://dksta.ru/novosti/news_post/pervokursnik-prihodi-na-sobranie-fakulteta",
+  "latest_title": "Первокурсник, приходи на собрание факультета!",
+  "latest_date": "28.08.2026",
+  "count": 34,
   "fail_streak": 0
 }

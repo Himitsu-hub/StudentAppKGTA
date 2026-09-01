@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ru.alemak.studentapp.data.model.FacultyCatalog
 import ru.alemak.studentapp.data.model.Lesson
 import ru.alemak.studentapp.data.model.ScheduleDay
 import ru.alemak.studentapp.ui.components.AppTopBar
@@ -61,6 +62,7 @@ fun ScheduleScreen(
     val scheduleBg = if (isLightBrand) Color(0xFFF5F7FA) else scheme.background
     val accent = if (isLightBrand) BlueKGTA else scheme.primary
 
+    var showFacultyDialog by remember { mutableStateOf(false) }
     var showCourseDialog by remember { mutableStateOf(false) }
     var showGroupDialog by remember { mutableStateOf(false) }
     var showSubgroupDialog by remember { mutableStateOf(false) }
@@ -112,19 +114,33 @@ fun ScheduleScreen(
                     )
 
                     Text(
-                        text = "Нажмите, чтобы сменить (курс / группа / подгруппа)",
+                        text = "Факультет / курс / группа / подгруппа",
                         color = if (isLightBrand) Color(0xFF5F6B7A) else scheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
 
-                    SelectionChip(
-                        text = "Курс: ${state.course}",
-                        onClick = { showCourseDialog = true },
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        SelectionChip(
+                            text = FacultyCatalog.shortName(state.faculty),
+                            onClick = { showFacultyDialog = true },
+                            compact = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        SelectionChip(
+                            text = "${state.course} курс",
+                            onClick = { showCourseDialog = true },
+                            compact = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     SelectionChip(
                         text = "Группа: ${state.group ?: "выбрать"}",
                         onClick = { if (state.groups.isNotEmpty()) showGroupDialog = true },
+                        compact = true,
                     )
                     SelectionChip(
                         text = "Подгруппа: ${state.subgroup ?: "выбрать"}",
@@ -135,6 +151,7 @@ fun ScheduleScreen(
                                 showSubgroupDialog = true
                             }
                         },
+                        compact = true,
                     )
 
                     Spacer(Modifier.height(8.dp))
@@ -162,10 +179,25 @@ fun ScheduleScreen(
         }
     }
 
+    if (showFacultyDialog) {
+        SimpleListDialog(
+            title = "Факультет",
+            items = FacultyCatalog.all.map {
+                "${it.short} — ${FacultyCatalog.fullName(it.id)}" to it.id
+            },
+            onSelect = {
+                viewModel.selectFaculty(it)
+                showFacultyDialog = false
+            },
+            onDismiss = { showFacultyDialog = false },
+        )
+    }
+
     if (showCourseDialog) {
+        val courses = FacultyCatalog.courses(state.faculty)
         SimpleListDialog(
             title = "Выберите курс",
-            items = (1..4).map { "$it курс" to it },
+            items = courses.map { "$it курс" to it },
             onSelect = {
                 viewModel.selectCourse(it)
                 showCourseDialog = false
@@ -201,24 +233,31 @@ fun ScheduleScreen(
 }
 
 @Composable
-private fun SelectionChip(text: String, onClick: () -> Unit) {
+private fun SelectionChip(
+    text: String,
+    onClick: () -> Unit,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
     val scheme = MaterialTheme.colorScheme
     val isLightBrand = scheme.background == BlueKGTA
     // Dark theme: navy chip + pure white text (primaryContainer was too dim)
     val chipBg = if (isLightBrand) BlueKGTA else DarkButton
+    val vPad = if (compact) 10.dp else 14.dp
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(vertical = if (compact) 3.dp else 4.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(if (compact) 10.dp else 12.dp),
         colors = CardDefaults.cardColors(containerColor = chipBg),
     ) {
         Text(
             text = text,
             color = Color.White,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = vPad),
         )
     }
 }
@@ -338,19 +377,35 @@ private fun LessonCard(lesson: Lesson) {
         shape = RoundedCornerShape(10.dp),
     ) {
         Column(Modifier.padding(12.dp)) {
+            val isOnline = lesson.room.contains("онлайн", ignoreCase = true)
+                || lesson.subject.contains("онлайн", ignoreCase = true)
+            val onlineColor = Color(0xFFE8624D)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(lesson.time, color = accent, fontWeight = FontWeight.Bold)
-                Text(
-                    text = lesson.type,
-                    color = when (lesson.type.lowercase()) {
-                        "лекция" -> if (isLightBrand) Color(0xFF1976D2) else Color(0xFF64B5F6)
-                        "практика" -> if (isLightBrand) Color(0xFF388E3C) else Color(0xFF81C784)
-                        "лабораторная" -> if (isLightBrand) Color(0xFFF57C00) else Color(0xFFFFB74D)
-                        else -> muted
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isOnline) {
+                        Text(
+                            text = "ОНЛАЙН",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .background(onlineColor, RoundedCornerShape(50))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                    Text(
+                        text = lesson.type,
+                        color = when (lesson.type.lowercase()) {
+                            "лекция" -> if (isLightBrand) Color(0xFF1976D2) else Color(0xFF64B5F6)
+                            "практика" -> if (isLightBrand) Color(0xFF388E3C) else Color(0xFF81C784)
+                            "лабораторная" -> if (isLightBrand) Color(0xFFF57C00) else Color(0xFFFFB74D)
+                            else -> muted
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
             }
             Spacer(Modifier.height(4.dp))
             Text(lesson.subject, fontWeight = FontWeight.SemiBold, color = textDark)
@@ -358,7 +413,12 @@ private fun LessonCard(lesson: Lesson) {
                 Text(lesson.teacher, color = muted)
             }
             if (lesson.room.isNotBlank()) {
-                Text("Аудитория: ${lesson.room}", color = muted)
+                val roomLabel = when {
+                    isOnline && lesson.room.equals("онлайн", ignoreCase = true) -> "Формат: онлайн"
+                    isOnline -> "Аудитория / формат: ${lesson.room}"
+                    else -> "Аудитория: ${lesson.room}"
+                }
+                Text(roomLabel, color = if (isOnline) onlineColor else muted)
             }
         }
     }

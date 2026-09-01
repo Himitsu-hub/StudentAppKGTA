@@ -3,6 +3,8 @@ package ru.alemak.studentapp.ui.onboarding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,14 +31,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ru.alemak.studentapp.data.model.FacultyCatalog
 import ru.alemak.studentapp.ui.theme.BlueKGTA
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingScreen(
     onFinished: () -> Unit,
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val courseOptions = FacultyCatalog.courses(state.faculty)
 
     Column(
         modifier = Modifier
@@ -58,30 +62,50 @@ fun OnboardingScreen(
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Сначала выберите курс, группу и подгруппу.\n" +
-                "Это нужно один раз — потом сразу откроется ваше расписание.\n\n" +
-                "Сменить можно в любой момент в разделе «Расписание» " +
-                "(например, когда перейдёте на следующий курс).",
+            text = "Выберите факультет, курс, группу и подгруппу.\n" +
+                "Сменить можно позже в разделе «Расписание».",
             color = Color.White.copy(alpha = 0.85f),
             textAlign = TextAlign.Center,
             fontSize = 14.sp,
             lineHeight = 20.sp,
         )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
 
-        StepTitle("1. Курс")
-        RowWrap {
-            (1..4).forEach { course ->
+        StepTitle("1. Факультет")
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FacultyCatalog.all.forEach { item ->
                 ChoiceChip(
-                    label = "$course курс",
-                    selected = state.course == course,
-                    onClick = { viewModel.selectCourse(course) },
+                    label = item.short,
+                    selected = state.faculty == item.id,
+                    onClick = { viewModel.selectFaculty(item.id) },
+                    compact = true,
                 )
             }
         }
 
-        Spacer(Modifier.height(20.dp))
-        StepTitle("2. Группа")
+        Spacer(Modifier.height(16.dp))
+        StepTitle("2. Курс")
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            courseOptions.forEach { course ->
+                ChoiceChip(
+                    label = "$course",
+                    selected = state.course == course,
+                    onClick = { viewModel.selectCourse(course) },
+                    compact = true,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        StepTitle("3. Группа")
         when {
             state.loadingGroups -> {
                 CircularProgressIndicator(color = Color.White, modifier = Modifier.padding(12.dp))
@@ -106,6 +130,7 @@ fun OnboardingScreen(
                             selected = state.group == group,
                             onClick = { viewModel.selectGroup(group) },
                             fullWidth = true,
+                            compact = true,
                         )
                     }
                 }
@@ -113,8 +138,8 @@ fun OnboardingScreen(
         }
 
         if (!state.group.isNullOrBlank()) {
-            Spacer(Modifier.height(20.dp))
-            StepTitle("3. Подгруппа")
+            Spacer(Modifier.height(16.dp))
+            StepTitle("4. Подгруппа")
             val subs = state.groups[state.group].orEmpty()
             if (subs.isEmpty()) {
                 Text(
@@ -130,6 +155,7 @@ fun OnboardingScreen(
                             selected = state.subgroup == sub,
                             onClick = { viewModel.selectSubgroup(sub) },
                             fullWidth = true,
+                            compact = true,
                         )
                     }
                 }
@@ -180,32 +206,31 @@ private fun StepTitle(text: String) {
 }
 
 @Composable
-private fun RowWrap(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        content = { content() },
-    )
-}
-
-@Composable
 private fun ChoiceChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
     fullWidth: Boolean = false,
+    compact: Boolean = false,
 ) {
     val bg = if (selected) Color.White else Color.White.copy(alpha = 0.15f)
     val fg = if (selected) BlueKGTA else Color.White
+    val height = if (compact) 40.dp else 46.dp
+    val fontSize = if (compact) 14.sp else 15.sp
     Button(
         onClick = onClick,
         modifier = Modifier
-            .then(if (fullWidth) Modifier.fillMaxWidth() else Modifier.fillMaxWidth())
-            .height(46.dp),
-        shape = RoundedCornerShape(14.dp),
+            .then(if (fullWidth) Modifier.fillMaxWidth() else Modifier)
+            .height(height),
+        shape = RoundedCornerShape(if (compact) 12.dp else 14.dp),
         colors = ButtonDefaults.buttonColors(containerColor = bg, contentColor = fg),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+        contentPadding = if (compact && !fullWidth) {
+            androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+        } else {
+            ButtonDefaults.ContentPadding
+        },
     ) {
-        Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 15.sp)
+        Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = fontSize)
     }
 }

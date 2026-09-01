@@ -12,6 +12,7 @@ enum WidgetUpdater {
         let weekType = vacation ? "Каникулы" : DateUtils.currentWeekType()
         let weekLine = vacation ? "Каникулы" : "Неделя: \(weekType)"
 
+        let faculty = await MainActor.run { prefs.faculty }
         let course = await MainActor.run { prefs.course }
         let group = await MainActor.run { prefs.group }
         let subgroup = await MainActor.run { prefs.subgroup }
@@ -56,6 +57,7 @@ enum WidgetUpdater {
                 return s
             }()
             let result = await ScheduleRepository.shared.getSchedule(
+                faculty: faculty,
                 course: course,
                 group: group!,
                 subgroup: subgroup

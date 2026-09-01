@@ -21,8 +21,10 @@ from parser import (
     DAY_START_ROWS,
     LAST_ROW,
     close_workbook,
+    looks_like_masters_sheet,
     open_workbook,
     parse_groups_from_header,
+    parse_masters_groups,
     parse_schedule_for_group,
 )
 
@@ -90,11 +92,14 @@ def validate_schedule_file(file_path: str) -> Dict[str, Any]:
         }
 
     try:
-        groups = parse_groups_from_header(sheet)
+        if looks_like_masters_sheet(sheet):
+            groups = parse_masters_groups(sheet)
+        else:
+            groups = parse_groups_from_header(sheet)
         if not groups:
             errors.append(
-                "В шапке не найдены группы (ожидаются И-…, У-…, П-…, ЭТ-… "
-                "на строке с названиями групп)."
+                "В шапке не найдены группы. Ожидаются коды вроде И-126, М-126, "
+                "КТ-124 или для магистратуры ТММ-125 на строке с названием группы."
             )
             return {"ok": False, "errors": errors, "warnings": warnings, "stats": stats}
 

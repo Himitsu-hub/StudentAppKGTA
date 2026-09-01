@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.alemak.studentapp.data.model.Teacher
+import ru.alemak.studentapp.data.model.TeacherLesson
+import ru.alemak.studentapp.data.repository.ScheduleRepository
 import ru.alemak.studentapp.data.repository.TeachersRepository
 import ru.alemak.studentapp.util.TeacherUtils
 
@@ -24,13 +26,23 @@ data class TeachersUiState(
     val error: String? = null,
 )
 
+data class TeacherTodayUiState(
+    val lessons: List<TeacherLesson> = emptyList(),
+    val isLoading: Boolean = false,
+    val loadedFor: String? = null,
+)
+
 @HiltViewModel
 class TeachersViewModel @Inject constructor(
     private val teachersRepository: TeachersRepository,
+    private val scheduleRepository: ScheduleRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TeachersUiState())
     val uiState: StateFlow<TeachersUiState> = _uiState.asStateFlow()
+
+    private val _todayState = MutableStateFlow(TeacherTodayUiState())
+    val todayState: StateFlow<TeacherTodayUiState> = _todayState.asStateFlow()
 
     init {
         refresh()
@@ -59,6 +71,27 @@ class TeachersViewModel @Inject constructor(
                         error = e.message ?: "Ошибка загрузки",
                     )
                 }
+            }
+        }
+    }
+
+    fun loadTodayLessons(teacherName: String) {
+        if (teacherName.isBlank()) return
+        val current = _todayState.value
+        if (current.loadedFor == teacherName && (current.isLoading || current.lessons.isNotEmpty())) {
+            return
+        }
+        viewModelScope.launch {
+            _todayState.update {
+                it.copy(isLoading = true, lessons = emptyList(), loadedFor = teacherName)
+            }
+            val result = scheduleRepository.scheduleByTeacher(query = teacherName, day = "today")
+            _todayState.update {
+                it.copy(
+                    isLoading = false,
+                    lessons = result.lessons,
+                    loadedFor = teacherName,
+                )
             }
         }
     }

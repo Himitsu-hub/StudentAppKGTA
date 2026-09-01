@@ -4,18 +4,33 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 
 interface ScheduleApi {
+    @GET("api/faculties")
+    suspend fun getFaculties(): FacultiesResponseDto
+
     @GET("api/courses")
-    suspend fun getCourses(): List<CourseInfoDto>
+    suspend fun getCourses(
+        @Query("faculty") faculty: String = "fae",
+    ): List<CourseInfoDto>
 
     @GET("api/groups")
-    suspend fun getGroups(@Query("course") course: Int): Map<String, List<String>>
+    suspend fun getGroups(
+        @Query("faculty") faculty: String = "fae",
+        @Query("course") course: Int,
+    ): Map<String, List<String>>
 
     @GET("api/schedule")
     suspend fun getSchedule(
+        @Query("faculty") faculty: String = "fae",
         @Query("course") course: Int,
         @Query("group") group: String,
         @Query("subgroup") subgroup: String? = null,
     ): ScheduleResponseDto
+
+    @GET("api/schedule/by-teacher")
+    suspend fun getScheduleByTeacher(
+        @Query("q") query: String,
+        @Query("day") day: String = "today",
+    ): TeacherScheduleResponseDto
 
     @GET("api/teachers")
     suspend fun getTeachers(): TeachersResponseDto

@@ -12,7 +12,7 @@ import androidx.room.TypeConverters
         NewsCacheEntity::class,
         ReminderEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

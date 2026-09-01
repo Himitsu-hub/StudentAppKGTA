@@ -152,26 +152,27 @@ class HomeViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            coroutineScope {
-                val lessonJob = async { loadNextLesson() }
-                val newsJob = async { loadNews() }
-                val lessonMeta = lessonJob.await()
-                var newsMeta = newsJob.await()
-                // force=true only schedules server scrape; brief second pass picks up new posts
-                delay(1_200L)
-                newsMeta = loadNews()
-                val latest = listOfNotNull(lessonMeta.updatedAt, newsMeta.updatedAt)
-                    .filter { it > 0L }
-                    .maxOrNull() ?: 0L
-                // Show offline banner only when offline (not merely when one source used cache)
-                val offline = !isOnline.value
-                _uiState.update {
-                    it.copy(
-                        usingCachedData = offline && (lessonMeta.fromCache || newsMeta.fromCache),
-                        updatedLabel = TimeFormat.updatedAtLabel(latest),
-                        isRefreshing = false,
-                    )
+            try {
+                coroutineScope {
+                    val lessonJob = async { loadNextLesson() }
+                    val newsJob = async { loadNews() }
+                    val lessonMeta = lessonJob.await()
+                    val newsMeta = newsJob.await()
+                    val latest = listOfNotNull(lessonMeta.updatedAt, newsMeta.updatedAt)
+                        .filter { it > 0L }
+                        .maxOrNull() ?: 0L
+                    // Show offline banner only when offline (not merely when one source used cache)
+                    val offline = !isOnline.value
+                    _uiState.update {
+                        it.copy(
+                            usingCachedData = offline && (lessonMeta.fromCache || newsMeta.fromCache),
+                            updatedLabel = TimeFormat.updatedAtLabel(latest) ?: it.updatedLabel,
+                            isRefreshing = false,
+                        )
+                    }
                 }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isRefreshing = false, isLoadingNews = false, isLoadingLesson = false) }
             }
         }
     }
@@ -210,9 +211,10 @@ class HomeViewModel @Inject constructor(
                 return LoadMeta(fromCache = false, updatedAt = 0L)
             }
             val result = scheduleRepository.getSchedule(
-                selection.course,
-                selection.group,
-                selection.subgroup,
+                faculty = selection.faculty,
+                course = selection.course,
+                group = selection.group,
+                subgroup = selection.subgroup,
             )
             val lesson = scheduleRepository.findNextLesson(result.schedule)
             _uiState.update {

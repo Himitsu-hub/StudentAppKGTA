@@ -80,9 +80,10 @@ class ScheduleWidgetUpdater @Inject constructor(
             }
             val result = runCatching {
                 scheduleRepository.getSchedule(
-                    selection.course,
-                    selection.group!!,
-                    selection.subgroup,
+                    faculty = selection.faculty,
+                    course = selection.course,
+                    group = selection.group!!,
+                    subgroup = selection.subgroup,
                 )
             }.getOrNull()
 

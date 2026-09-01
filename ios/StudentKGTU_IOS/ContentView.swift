@@ -8,7 +8,9 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if prefs.onboardingDone && prefs.hasGroup {
+            // Once onboarded, stay in the main app even while group is briefly nil
+            // (faculty/course change). Otherwise OnboardingView flashes for ~1s.
+            if prefs.onboardingDone {
                 NavigationStack(path: $path) {
                     HomeView(path: $path)
                         .navigationDestination(for: AppRoute.self) { route in

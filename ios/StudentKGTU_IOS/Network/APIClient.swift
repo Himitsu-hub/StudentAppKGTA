@@ -28,9 +28,9 @@ actor APIClient {
         // NEVER waitsForConnectivity — that hangs for minutes in airplane mode.
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = false
-        // Fail fast on wedged API so pull-to-refresh falls back to cache quickly
-        config.timeoutIntervalForRequest = 12
-        config.timeoutIntervalForResource = 20
+        // Fail fast on wedged API so pull-to-refresh never spins for a minute
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 12
         config.httpMaximumConnectionsPerHost = 4
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.allowsExpensiveNetworkAccess = true
@@ -38,22 +38,45 @@ actor APIClient {
         self.session = URLSession(configuration: config)
     }
 
-    func courses() async throws -> [CourseInfo] {
-        try await get("/api/courses")
+    func faculties() async throws -> FacultiesResponse {
+        try await get("/api/faculties")
     }
 
-    func groups(course: Int) async throws -> [String: [String]] {
-        try await get("/api/groups", query: [("course", String(course))])
+    func courses(faculty: String = FacultyCatalog.fae) async throws -> [CourseInfo] {
+        try await get("/api/courses", query: [("faculty", faculty)])
     }
 
-    func schedule(course: Int, group: String, subgroup: String?) async throws -> ScheduleResult {
-        var q: [(String, String)] = [("course", String(course)), ("group", group)]
+    func groups(faculty: String = FacultyCatalog.fae, course: Int) async throws -> [String: [String]] {
+        try await get("/api/groups", query: [
+            ("faculty", faculty),
+            ("course", String(course)),
+        ])
+    }
+
+    func schedule(
+        faculty: String = FacultyCatalog.fae,
+        course: Int,
+        group: String,
+        subgroup: String?
+    ) async throws -> ScheduleResult {
+        var q: [(String, String)] = [
+            ("faculty", faculty),
+            ("course", String(course)),
+            ("group", group),
+        ]
         if let subgroup, !subgroup.isEmpty { q.append(("subgroup", subgroup)) }
         var result: ScheduleResult = try await get("/api/schedule", query: q)
         result.isOffline = false
         result.fromCache = false
         result.updatedAtMillis = Date().timeIntervalSince1970 * 1000
         return result
+    }
+
+    func scheduleByTeacher(query: String, day: String = "today") async throws -> TeacherScheduleResponse {
+        try await get("/api/schedule/by-teacher", query: [
+            ("q", query),
+            ("day", day),
+        ])
     }
 
     func weekType() async throws -> String {
@@ -63,9 +86,10 @@ actor APIClient {
 
     func news(limit: Int = 10, force: Bool = false) async throws -> [NewsItem] {
         var q: [(String, String)] = [("limit", String(limit))]
-        // force=true → server re-scrapes dksta.ru so pull-to-refresh gets brand-new posts
+        // force=true → ask server for a background scrape; response is still from cache
         if force { q.append(("force", "true")) }
-        let r: NewsResponse = try await get("/api/news", query: q)
+        // Single attempt — retries make PTR feel "eternal" when API is down
+        let r: NewsResponse = try await get("/api/news", query: q, retries: 1)
         return r.news
     }
 
@@ -122,7 +146,7 @@ actor APIClient {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("StudentKGTU-iOS", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 12
+        request.timeoutInterval = 8
 
         do {
             let (data, response) = try await session.data(for: request)

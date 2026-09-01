@@ -59,4 +59,34 @@ data class Reminder(
 data class CourseInfo(
     val course: Int,
     val available: Boolean,
+    val faculty: String = FacultyCatalog.FAE,
+)
+
+data class FacultyInfo(
+    val id: String,
+    val short: String,
+    val name: String,
+    val courses: List<CourseInfo> = emptyList(),
+)
+
+/** Lesson from GET /api/schedule/by-teacher */
+data class TeacherLesson(
+    val dayName: String = "",
+    val time: String = "",
+    val subject: String = "",
+    val teacher: String = "",
+    val room: String = "",
+    val type: String = "",
+    val faculty: String = "",
+    val course: Int = 0,
+    val group: String = "",
+    val subgroup: String = "",
+)
+
+data class TeacherScheduleResult(
+    val query: String = "",
+    val weekType: String = "",
+    val day: String = "",
+    val count: Int = 0,
+    val lessons: List<TeacherLesson> = emptyList(),
 )

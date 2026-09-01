@@ -14,11 +14,13 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import ru.alemak.studentapp.data.model.FacultyCatalog
 import ru.alemak.studentapp.ui.theme.ThemePrefs
 
 private val Context.userDataStore: DataStore<Preferences> by preferencesDataStore("user_prefs")
 
 data class UserSelection(
+    val faculty: String = FacultyCatalog.FAE,
     val course: Int = 1,
     val group: String? = null,
     val subgroup: String? = null,
@@ -31,8 +33,12 @@ class UserPreferences @Inject constructor(
     private val store = context.userDataStore
 
     val selection: Flow<UserSelection> = store.data.map { prefs ->
+        val faculty = FacultyCatalog.normalize(prefs[Keys.FACULTY])
+        val maxCourse = FacultyCatalog.courses(faculty).lastOrNull() ?: 4
+        val rawCourse = prefs[Keys.COURSE] ?: 1
         UserSelection(
-            course = prefs[Keys.COURSE] ?: 1,
+            faculty = faculty,
+            course = rawCourse.coerceIn(1, maxCourse),
             group = prefs[Keys.GROUP],
             subgroup = prefs[Keys.SUBGROUP],
         )
@@ -46,15 +52,24 @@ class UserPreferences @Inject constructor(
         prefs[Keys.ONBOARDING_DONE] == true || !prefs[Keys.GROUP].isNullOrBlank()
     }
 
-    suspend fun save(course: Int, group: String?, subgroup: String?) {
+    suspend fun save(faculty: String, course: Int, group: String?, subgroup: String?) {
+        val fid = FacultyCatalog.normalize(faculty)
+        val maxCourse = FacultyCatalog.courses(fid).lastOrNull() ?: 4
         store.edit { prefs ->
-            prefs[Keys.COURSE] = course
+            prefs[Keys.FACULTY] = fid
+            prefs[Keys.COURSE] = course.coerceIn(1, maxCourse)
             if (group != null) prefs[Keys.GROUP] = group else prefs.remove(Keys.GROUP)
             if (subgroup != null) prefs[Keys.SUBGROUP] = subgroup else prefs.remove(Keys.SUBGROUP)
             if (!group.isNullOrBlank()) {
                 prefs[Keys.ONBOARDING_DONE] = true
             }
         }
+    }
+
+    /** Backward-compatible save without changing faculty. */
+    suspend fun save(course: Int, group: String?, subgroup: String?) {
+        val faculty = selection.first().faculty
+        save(faculty, course, group, subgroup)
     }
 
     suspend fun setDarkTheme(enabled: Boolean) {
@@ -69,15 +84,27 @@ class UserPreferences @Inject constructor(
     }
 
     suspend fun getSelectedCourse(): Int =
-        store.data.map { it[Keys.COURSE] ?: 1 }.first()
+        selection.first().course
 
-    suspend fun getScheduleVersion(course: Int): String =
-        store.data.map { it[scheduleVersionKey(course)].orEmpty() }.first()
+    suspend fun getSelectedFaculty(): String =
+        selection.first().faculty
 
-    suspend fun setScheduleVersion(course: Int, version: String) {
+    suspend fun getScheduleVersion(faculty: String, course: Int): String =
+        store.data.map { it[scheduleVersionKey(faculty, course)].orEmpty() }.first()
+
+    suspend fun setScheduleVersion(faculty: String, course: Int, version: String) {
         store.edit { prefs ->
-            prefs[scheduleVersionKey(course)] = version
+            prefs[scheduleVersionKey(faculty, course)] = version
         }
+    }
+
+    @Deprecated("Use getScheduleVersion(faculty, course)")
+    suspend fun getScheduleVersion(course: Int): String =
+        getScheduleVersion(FacultyCatalog.FAE, course)
+
+    @Deprecated("Use setScheduleVersion(faculty, course, version)")
+    suspend fun setScheduleVersion(course: Int, version: String) {
+        setScheduleVersion(FacultyCatalog.FAE, course, version)
     }
 
     suspend fun getNewsVersion(): String =
@@ -87,10 +114,11 @@ class UserPreferences @Inject constructor(
         store.edit { prefs -> prefs[Keys.NEWS_VERSION] = version }
     }
 
-    private fun scheduleVersionKey(course: Int) =
-        stringPreferencesKey("schedule_version_$course")
+    private fun scheduleVersionKey(faculty: String, course: Int) =
+        stringPreferencesKey("schedule_version_${FacultyCatalog.normalize(faculty)}_$course")
 
     private object Keys {
+        val FACULTY = stringPreferencesKey("selected_faculty")
         val COURSE = intPreferencesKey("selected_course")
         val GROUP = stringPreferencesKey("selected_group")
         val SUBGROUP = stringPreferencesKey("selected_subgroup")

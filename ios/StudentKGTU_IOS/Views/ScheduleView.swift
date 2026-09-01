@@ -6,6 +6,7 @@ struct ScheduleView: View {
     @EnvironmentObject private var cache: ScheduleSessionCache
     @Environment(\.dismiss) private var dismiss
 
+    @State private var showFaculty = false
     @State private var showCourse = false
     @State private var showGroup = false
     @State private var showSubgroup = false
@@ -33,15 +34,18 @@ struct ScheduleView: View {
                         .font(.title3.weight(.bold))
                         .foregroundStyle(accent)
 
-                    Text("Нажмите, чтобы сменить (курс / группа / подгруппа)")
-                        .font(.caption)
+                    Text("Факультет / курс / группа / подгруппа")
+                        .font(.caption2)
                         .foregroundStyle(muted)
 
-                    selectionChip("Курс: \(prefs.course)") { showCourse = true }
-                    selectionChip("Группа: \(prefs.group ?? "выбрать")") {
+                    HStack(spacing: 8) {
+                        selectionChip("\(prefs.facultyShort)", compact: true) { showFaculty = true }
+                        selectionChip("\(prefs.course) курс", compact: true) { showCourse = true }
+                    }
+                    selectionChip("Группа: \(prefs.group ?? "выбрать")", compact: true) {
                         if !cache.groups.isEmpty { showGroup = true }
                     }
-                    selectionChip("Подгруппа: \(prefs.subgroup ?? "выбрать")") {
+                    selectionChip("Подгруппа: \(prefs.subgroup ?? "выбрать")", compact: true) {
                         if let g = prefs.group, !(cache.groups[g] ?? []).isEmpty {
                             showSubgroup = true
                         }
@@ -72,20 +76,48 @@ struct ScheduleView: View {
             // No spinner if session cache already has this group (Android-like)
             await cache.load(prefs: prefs, force: false)
         }
+        .sheet(isPresented: $showFaculty) {
+            schedulePickerSheet(
+                title: "Факультет",
+                labels: FacultyCatalog.all.map { "\($0.short) — \(FacultyCatalog.fullName($0.id))" }
+            ) { index in
+                let fid = FacultyCatalog.all[index].id
+                // Keep previous group until new list loads — avoids Onboarding flash.
+                Task {
+                    let loaded = await ScheduleRepository.shared.getGroups(faculty: fid, course: 1)
+                    cache.setGroups(loaded)
+                    let first = loaded.keys.sorted().first
+                    prefs.save(
+                        faculty: fid,
+                        course: 1,
+                        group: first,
+                        subgroup: first.flatMap { loaded[$0]?.first }
+                    )
+                    cache.invalidate()
+                    await cache.load(prefs: prefs, force: true)
+                }
+            }
+        }
         .sheet(isPresented: $showCourse) {
+            let courses = FacultyCatalog.courses(for: prefs.faculty)
             schedulePickerSheet(
                 title: "Выберите курс",
-                labels: (1...4).map { "\($0) курс" }
+                labels: courses.map { "\($0) курс" }
             ) { index in
-                let c = index + 1
-                prefs.save(course: c, group: nil, subgroup: nil)
-                cache.invalidate()
+                let c = courses[index]
+                let fac = prefs.faculty
                 Task {
+                    let loaded = await ScheduleRepository.shared.getGroups(faculty: fac, course: c)
+                    cache.setGroups(loaded)
+                    let first = loaded.keys.sorted().first
+                    prefs.save(
+                        faculty: fac,
+                        course: c,
+                        group: first,
+                        subgroup: first.flatMap { loaded[$0]?.first }
+                    )
+                    cache.invalidate()
                     await cache.load(prefs: prefs, force: true)
-                    if prefs.group == nil, let first = cache.groups.keys.sorted().first {
-                        prefs.save(course: c, group: first, subgroup: cache.groups[first]?.first)
-                        await cache.load(prefs: prefs, force: true)
-                    }
                 }
             }
         }
@@ -94,7 +126,7 @@ struct ScheduleView: View {
             schedulePickerSheet(title: "Выберите группу", labels: names) { index in
                 let name = names[index]
                 let sub = cache.groups[name]?.first
-                prefs.save(course: prefs.course, group: name, subgroup: sub)
+                prefs.save(faculty: prefs.faculty, course: prefs.course, group: name, subgroup: sub)
                 cache.invalidate()
                 Task { await cache.load(prefs: prefs, force: true) }
             }
@@ -103,7 +135,7 @@ struct ScheduleView: View {
             let subs = cache.groups[prefs.group ?? ""] ?? []
             schedulePickerSheet(title: "Подгруппа", labels: subs) { index in
                 let sub = subs[index]
-                prefs.save(course: prefs.course, group: prefs.group, subgroup: sub)
+                prefs.save(faculty: prefs.faculty, course: prefs.course, group: prefs.group, subgroup: sub)
                 cache.invalidate()
                 Task { await cache.load(prefs: prefs, force: true) }
             }
@@ -124,6 +156,7 @@ struct ScheduleView: View {
                     ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
                         Button {
                             onPick(index)
+                            showFaculty = false
                             showCourse = false
                             showGroup = false
                             showSubgroup = false
@@ -156,6 +189,7 @@ struct ScheduleView: View {
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") {
+                        showFaculty = false
                         showCourse = false
                         showGroup = false
                         showSubgroup = false
@@ -174,20 +208,22 @@ struct ScheduleView: View {
         .presentationBackground(AppColors.darkNavy)
     }
 
-    private func selectionChip(_ text: String, action: @escaping () -> Void) -> some View {
+    private func selectionChip(_ text: String, compact: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text)
-                .font(.body.weight(.semibold))
+                .font((compact ? Font.subheadline : Font.body).weight(.semibold))
                 .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.horizontal, compact ? 12 : 16)
+                .padding(.vertical, compact ? 10 : 14)
                 .background(theme.isDark ? AppColors.darkNavy : AppColors.blueKGTA)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: compact ? 10 : 12)
                         .stroke(theme.isDark ? AppColors.darkButtonBorder : Color.clear, lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: compact ? 10 : 12))
         }
         .buttonStyle(.plain)
     }
@@ -226,6 +262,9 @@ struct ScheduleView: View {
 
     private func lessonCard(_ lesson: Lesson) -> some View {
         let lessonBg = theme.isDark ? AppColors.darkButton : AppColors.lessonBgLight
+        let isOnline = lesson.room.localizedCaseInsensitiveContains("онлайн")
+            || lesson.subject.localizedCaseInsensitiveContains("онлайн")
+            || lesson.teacher.localizedCaseInsensitiveContains("онлайн")
         let typeColor: Color = {
             switch lesson.type.lowercased() {
             case "лекция": return theme.isDark ? Color(red: 0.39, green: 0.71, blue: 0.96) : Color(red: 0.1, green: 0.46, blue: 0.82)
@@ -238,6 +277,15 @@ struct ScheduleView: View {
             HStack {
                 Text(lesson.time).fontWeight(.bold).foregroundStyle(accent)
                 Spacer()
+                if isOnline {
+                    Text("ОНЛАЙН")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color(red: 0.91, green: 0.38, blue: 0.30))
+                        .clipShape(Capsule())
+                }
                 Text(lesson.type).font(.caption.weight(.medium)).foregroundStyle(typeColor)
             }
             Text(lesson.subject).fontWeight(.semibold)
@@ -246,7 +294,8 @@ struct ScheduleView: View {
                 Text(lesson.teacher).foregroundStyle(muted)
             }
             if !lesson.room.isEmpty {
-                Text("Аудитория: \(lesson.room)").foregroundStyle(muted)
+                Text(isOnline && lesson.room.lowercased() == "онлайн" ? "Формат: онлайн" : (isOnline ? "Аудитория / формат: \(lesson.room)" : "Аудитория: \(lesson.room)"))
+                    .foregroundStyle(isOnline ? Color(red: 0.91, green: 0.38, blue: 0.30) : muted)
             }
         }
         .padding(12)

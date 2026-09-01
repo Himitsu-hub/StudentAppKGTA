@@ -72,14 +72,14 @@ object AppModule {
     @Provides
     @Singleton
     fun provideOkHttp(): OkHttpClient {
-        // Keep timeouts moderate — PTR must not hang for minutes when API is wedged.
+        // Short timeouts — PTR must fail fast to cache when API/VPS is wedged.
         val builder = OkHttpClient.Builder()
-            .connectTimeout(12, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .writeTimeout(20, TimeUnit.SECONDS)
-            .callTimeout(25, TimeUnit.SECONDS)
+            .connectTimeout(6, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
+            .callTimeout(12, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
-            .addInterceptor(RetryInterceptor(maxAttempts = 2))
+            .addInterceptor(RetryInterceptor(maxAttempts = 1))
         if (BuildConfig.DEBUG) {
             val logging = HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BASIC

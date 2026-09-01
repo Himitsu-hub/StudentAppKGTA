@@ -144,17 +144,20 @@ struct ChoiceChip: View {
     let selected: Bool
     let onClick: () -> Void
     var fullWidth: Bool = false
+    var compact: Bool = false
 
     var body: some View {
         Button(action: onClick) {
             Text(label)
-                .font(.subheadline.weight(.semibold))
+                .font((compact ? Font.caption : Font.subheadline).weight(.semibold))
                 .foregroundStyle(selected ? AppColors.blueKGTA : .white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .frame(maxWidth: fullWidth ? .infinity : nil)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, compact ? 10 : 16)
+                .padding(.vertical, compact ? 8 : 12)
                 .background(selected ? Color.white : Color.white.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: compact ? 10 : 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -172,37 +175,38 @@ extension View {
     }
 
     /// Swipe from left edge → back (like system interactive pop).
-    func swipeBack(perform action: @escaping () -> Void) -> some View {
-        self.modifier(EdgeSwipeBackModifier(onBack: action))
+    /// - Parameter enableSystemPop: when false, only our gesture runs (needed for
+    ///   in-place detail screens like teacher card → list → home).
+    func swipeBack(enableSystemPop: Bool = true, perform action: @escaping () -> Void) -> some View {
+        self.modifier(EdgeSwipeBackModifier(onBack: action, enableSystemPop: enableSystemPop))
     }
 }
 
 /// Edge swipe right from the left side of the screen to go back.
+/// Uses simultaneousGesture so ScrollView vertical scrolling still works.
 private struct EdgeSwipeBackModifier: ViewModifier {
     let onBack: () -> Void
-    @State private var dragging = false
+    var enableSystemPop: Bool = true
 
     func body(content: Content) -> some View {
         content
             .simultaneousGesture(
-                DragGesture(minimumDistance: 24, coordinateSpace: .global)
-                    .onChanged { value in
-                        if value.startLocation.x < 32 {
-                            dragging = true
-                        }
-                    }
+                DragGesture(minimumDistance: 28, coordinateSpace: .global)
                     .onEnded { value in
-                        defer { dragging = false }
-                        let fromEdge = value.startLocation.x < 36
-                        let swipedRight = value.translation.width > 70
-                        let notVertical = abs(value.translation.height) < 120
-                        if fromEdge && swipedRight && notVertical {
+                        // Only left-edge → right horizontal swipes count as "back".
+                        // Vertical list scrolling must not be blocked.
+                        let fromEdge = value.startLocation.x < 28
+                        let swipedRight = value.translation.width > 80
+                        let mostlyHorizontal =
+                            abs(value.translation.width) > abs(value.translation.height) * 1.4
+                        let notTooVertical = abs(value.translation.height) < 100
+                        if fromEdge && swipedRight && mostlyHorizontal && notTooVertical {
                             onBack()
                         }
                     }
             )
             #if os(iOS)
-            .background(InteractivePopEnabler())
+            .background(InteractivePopEnabler(enabled: enableSystemPop))
             #endif
     }
 }
@@ -210,40 +214,48 @@ private struct EdgeSwipeBackModifier: ViewModifier {
 #if os(iOS)
 /// Re-enable UINavigationController edge-swipe when nav bar is hidden.
 private struct InteractivePopEnabler: UIViewControllerRepresentable {
+    var enabled: Bool = true
+
     func makeUIViewController(context: Context) -> Controller {
-        Controller()
+        let c = Controller()
+        c.popEnabled = enabled
+        return c
     }
 
     func updateUIViewController(_ uiViewController: Controller, context: Context) {
-        uiViewController.enablePop()
+        uiViewController.popEnabled = enabled
+        uiViewController.applyPopEnabled()
     }
 
     final class Controller: UIViewController, UIGestureRecognizerDelegate {
+        var popEnabled: Bool = true
+
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
-            enablePop()
+            applyPopEnabled()
         }
 
-        func enablePop() {
-            guard let nav = navigationController else {
-                // Walk parents — SwiftUI hosting may nest
-                var responder: UIResponder? = self
-                while let r = responder {
-                    if let nav = r as? UINavigationController {
-                        nav.interactivePopGestureRecognizer?.isEnabled = true
-                        nav.interactivePopGestureRecognizer?.delegate = self
-                        return
-                    }
-                    responder = r.next
-                }
-                return
+        func applyPopEnabled() {
+            guard let nav = findNav() else { return }
+            // When disabled, block system pop so in-place detail (teacher card) can
+            // handle swipe → list without jumping to Home.
+            nav.interactivePopGestureRecognizer?.isEnabled = popEnabled
+            nav.interactivePopGestureRecognizer?.delegate = popEnabled ? self : nil
+        }
+
+        private func findNav() -> UINavigationController? {
+            if let nav = navigationController { return nav }
+            var responder: UIResponder? = self
+            while let r = responder {
+                if let nav = r as? UINavigationController { return nav }
+                responder = r.next
             }
-            nav.interactivePopGestureRecognizer?.isEnabled = true
-            nav.interactivePopGestureRecognizer?.delegate = self
+            return nil
         }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            (navigationController?.viewControllers.count ?? 0) > 1
+            guard popEnabled else { return false }
+            return (findNav()?.viewControllers.count ?? 0) > 1
         }
     }
 }

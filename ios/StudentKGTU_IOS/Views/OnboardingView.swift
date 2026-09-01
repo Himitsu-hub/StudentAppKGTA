@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingView: View {
     @EnvironmentObject private var prefs: UserPreferences
+    @State private var faculty: String = FacultyCatalog.fae
     @State private var course: Int = 1
     @State private var groups: [String: [String]] = [:]
     @State private var group: String?
@@ -10,34 +11,59 @@ struct OnboardingView: View {
     @State private var saving = false
     @State private var error: String?
 
+    private var courseOptions: [Int] { FacultyCatalog.courses(for: faculty) }
+
     var canFinish: Bool {
         !(group ?? "").isEmpty
     }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 14) {
                 Spacer().frame(height: 12)
                 Text("Добро пожаловать")
                     .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(.white)
-                Text("Сначала выберите курс, группу и подгруппу.\nЭто нужно один раз — потом сразу откроется ваше расписание.\n\nСменить можно в любой момент в разделе «Расписание».")
+                Text("Выберите факультет, курс, группу и подгруппу.\nСменить можно позже в разделе «Расписание».")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
 
-                stepTitle("1. Курс")
+                stepTitle("1. Факультет")
                 HStack(spacing: 8) {
-                    ForEach(1...4, id: \.self) { c in
-                        ChoiceChip(label: "\(c) курс", selected: course == c) {
-                            course = c
-                            Task { await loadGroups() }
-                        }
+                    ForEach(FacultyCatalog.all, id: \.id) { item in
+                        ChoiceChip(
+                            label: item.short,
+                            selected: faculty == item.id,
+                            onClick: {
+                                faculty = item.id
+                                course = 1
+                                group = nil
+                                subgroup = nil
+                                Task { await loadGroups() }
+                            },
+                            compact: true
+                        )
                     }
                 }
 
-                stepTitle("2. Группа")
+                stepTitle("2. Курс")
+                HStack(spacing: 6) {
+                    ForEach(courseOptions, id: \.self) { c in
+                        ChoiceChip(
+                            label: "\(c)",
+                            selected: course == c,
+                            onClick: {
+                                course = c
+                                Task { await loadGroups() }
+                            },
+                            compact: true
+                        )
+                    }
+                }
+
+                stepTitle("3. Группа")
                 if loading {
                     ProgressView().tint(.white)
                 } else if groups.isEmpty {
@@ -50,16 +76,16 @@ struct OnboardingView: View {
                 } else {
                     VStack(spacing: 8) {
                         ForEach(groups.keys.sorted(), id: \.self) { name in
-                            ChoiceChip(label: name, selected: group == name, fullWidth: true) {
+                            ChoiceChip(label: name, selected: group == name, onClick: {
                                 group = name
                                 subgroup = groups[name]?.first
-                            }
+                            }, fullWidth: true, compact: true)
                         }
                     }
                 }
 
                 if let group, !group.isEmpty {
-                    stepTitle("3. Подгруппа")
+                    stepTitle("4. Подгруппа")
                     let subs = groups[group] ?? []
                     if subs.isEmpty {
                         Text("Подгруппы не указаны — будет общая группа")
@@ -68,9 +94,9 @@ struct OnboardingView: View {
                     } else {
                         VStack(spacing: 8) {
                             ForEach(subs, id: \.self) { sub in
-                                ChoiceChip(label: sub, selected: subgroup == sub, fullWidth: true) {
+                                ChoiceChip(label: sub, selected: subgroup == sub, onClick: {
                                     subgroup = sub
-                                }
+                                }, fullWidth: true, compact: true)
                             }
                         }
                     }
@@ -117,7 +143,7 @@ struct OnboardingView: View {
         loading = true
         error = nil
         defer { loading = false }
-        groups = await ScheduleRepository.shared.getGroups(course: course)
+        groups = await ScheduleRepository.shared.getGroups(faculty: faculty, course: course)
         if groups.isEmpty {
             error = "Не удалось загрузить группы"
             group = nil
@@ -135,7 +161,7 @@ struct OnboardingView: View {
     private func finish() async {
         guard let group else { return }
         saving = true
-        prefs.save(course: course, group: group, subgroup: subgroup)
+        prefs.save(faculty: faculty, course: course, group: group, subgroup: subgroup)
         saving = false
     }
 }

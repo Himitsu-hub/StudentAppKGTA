@@ -14,8 +14,8 @@ interface ScheduleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSchedule(entity: ScheduleCacheEntity)
 
-    @Query("SELECT * FROM cached_groups WHERE course = :course LIMIT 1")
-    suspend fun getGroups(course: Int): GroupsCacheEntity?
+    @Query("SELECT * FROM cached_groups WHERE cacheKey = :key LIMIT 1")
+    suspend fun getGroups(key: String): GroupsCacheEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertGroups(entity: GroupsCacheEntity)

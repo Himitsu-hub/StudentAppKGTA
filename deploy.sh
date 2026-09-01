@@ -29,7 +29,7 @@ fi
 echo "1/6 Copying code to $S:$REMOTE_DIR ..."
 ssh "$S" "mkdir -p $REMOTE_DIR/uploads $REMOTE_DIR/scripts $REMOTE_DIR/static"
 scp "$D/main.py" "$D/database.py" "$D/parser.py" "$D/scraper.py" "$D/news_scraper.py" \
-    "$D/schedule_validator.py" \
+    "$D/schedule_validator.py" "$D/faculties.py" "$D/teacher_match.py" \
     "$D/requirements.txt" "$D/Dockerfile" "$D/docker-compose.yml" "$D/Caddyfile" \
     "$S:$REMOTE_DIR/"
 if [[ -d "$D/static" ]]; then
@@ -40,9 +40,12 @@ if [[ -f "$D/scripts/harden_firewall.sh" ]]; then
   ssh "$S" "chmod +x $REMOTE_DIR/scripts/harden_firewall.sh"
 fi
 
-if compgen -G "$D/uploads/"*.xlsx > /dev/null; then
+if compgen -G "$D/uploads/"*.xlsx > /dev/null || compgen -G "$D/uploads/"*.xls > /dev/null; then
   echo "2/6 Copying Excel schedules..."
-  scp "$D/uploads/"*.xlsx "$S:$REMOTE_DIR/uploads/"
+  shopt -s nullglob
+  scp "$D/uploads/"*.xlsx "$D/uploads/"*.xls "$S:$REMOTE_DIR/uploads/" 2>/dev/null || \
+    scp "$D/uploads/"*schedule* "$S:$REMOTE_DIR/uploads/"
+  shopt -u nullglob
 else
   echo "2/6 No local Excel files — skipping"
 fi

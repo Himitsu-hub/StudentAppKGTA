@@ -7,6 +7,7 @@ enum ScheduleUpdateChecker {
     private static let versionKeyPrefix = "schedule_version_"
 
     struct CourseUpdate: Decodable {
+        let faculty: String?
         let course: Int
         let version: String?
         let updatedAt: String?
@@ -22,13 +23,16 @@ enum ScheduleUpdateChecker {
     @discardableResult
     static func check(notify: Bool = true) async -> Bool {
         do {
+            let faculty = await MainActor.run { UserPreferences.shared.faculty }
             let course = await MainActor.run { UserPreferences.shared.course }
             guard let updates = try await fetchUpdates() else { return false }
-            guard let remote = updates.courses.first(where: { $0.course == course }) else { return false }
+            guard let remote = updates.courses.first(where: {
+                $0.course == course && ($0.faculty ?? FacultyCatalog.fae) == faculty
+            }) else { return false }
             let remoteVersion = remote.version ?? ""
             guard !remoteVersion.isEmpty, remote.available == true else { return false }
 
-            let key = versionKeyPrefix + "\(course)"
+            let key = versionKeyPrefix + "\(faculty)_\(course)"
             let known = UserDefaults.standard.string(forKey: key) ?? ""
             if known.isEmpty {
                 UserDefaults.standard.set(remoteVersion, forKey: key)
@@ -37,7 +41,7 @@ enum ScheduleUpdateChecker {
             if known != remoteVersion {
                 UserDefaults.standard.set(remoteVersion, forKey: key)
                 if notify {
-                    await showNotification(course: course)
+                    await showNotification(faculty: faculty, course: course)
                 }
                 return true
             }
@@ -59,17 +63,18 @@ enum ScheduleUpdateChecker {
         return try JSONDecoder().decode(UpdatesResponse.self, from: data)
     }
 
-    private static func showNotification(course: Int) async {
+    private static func showNotification(faculty: String, course: Int) async {
         let center = UNUserNotificationCenter.current()
         _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
         let content = UNMutableNotificationContent()
         content.title = "Расписание обновлено"
-        content.body = "На сервере новое расписание для \(course) курса. Откройте приложение."
+        let fac = FacultyCatalog.shortName(faculty)
+        content.body = "Новое расписание: \(fac), \(course) курс. Откройте приложение."
         content.sound = .default
-        content.userInfo = ["route": "schedule", "course": course]
+        content.userInfo = ["route": "schedule", "faculty": faculty, "course": course]
         content.categoryIdentifier = "schedule"
         let req = UNNotificationRequest(
-            identifier: "schedule-update-\(course)-\(Date().timeIntervalSince1970)",
+            identifier: "schedule-update-\(faculty)-\(course)-\(Date().timeIntervalSince1970)",
             content: content,
             trigger: nil
         )

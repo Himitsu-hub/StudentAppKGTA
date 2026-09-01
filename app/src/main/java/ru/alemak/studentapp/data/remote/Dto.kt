@@ -2,18 +2,46 @@ package ru.alemak.studentapp.data.remote
 
 import com.google.gson.annotations.SerializedName
 import ru.alemak.studentapp.data.model.CourseInfo
+import ru.alemak.studentapp.data.model.FacultyCatalog
+import ru.alemak.studentapp.data.model.FacultyInfo
 import ru.alemak.studentapp.data.model.Lesson
 import ru.alemak.studentapp.data.model.NewsItem
 import ru.alemak.studentapp.data.model.ScheduleDay
 import ru.alemak.studentapp.data.model.ScheduleResult
 import ru.alemak.studentapp.data.model.Teacher
+import ru.alemak.studentapp.data.model.TeacherLesson
+import ru.alemak.studentapp.data.model.TeacherScheduleResult
 
 data class CourseInfoDto(
     val course: Int,
     val available: Boolean,
+    val faculty: String? = null,
 ) {
-    fun toDomain() = CourseInfo(course, available)
+    fun toDomain() = CourseInfo(
+        course = course,
+        available = available,
+        faculty = faculty ?: FacultyCatalog.FAE,
+    )
 }
+
+data class FacultyInfoDto(
+    val id: String = "",
+    val short: String = "",
+    val name: String = "",
+    val courses: List<CourseInfoDto> = emptyList(),
+) {
+    fun toDomain() = FacultyInfo(
+        id = id,
+        short = short,
+        name = name,
+        courses = courses.map { it.toDomain() },
+    )
+}
+
+data class FacultiesResponseDto(
+    val faculties: List<FacultyInfoDto> = emptyList(),
+    @SerializedName("defaultFaculty") val defaultFaculty: String? = null,
+)
 
 data class ScheduleResponseDto(
     val course: Int,
@@ -98,11 +126,54 @@ data class ScheduleUpdatesDto(
 )
 
 data class CourseUpdateDto(
+    val faculty: String? = null,
     val course: Int,
     val version: String = "",
     val updatedAt: String? = null,
     val available: Boolean = false,
 )
+
+data class TeacherLessonDto(
+    val dayName: String = "",
+    val time: String = "",
+    val subject: String = "",
+    val teacher: String = "",
+    val room: String = "",
+    val type: String = "",
+    val faculty: String = "",
+    val course: Int = 0,
+    val group: String = "",
+    val subgroup: String = "",
+) {
+    fun toDomain() = TeacherLesson(
+        dayName = dayName,
+        time = time,
+        subject = subject,
+        teacher = teacher,
+        room = room,
+        type = type,
+        faculty = faculty,
+        course = course,
+        group = group,
+        subgroup = subgroup,
+    )
+}
+
+data class TeacherScheduleResponseDto(
+    val query: String = "",
+    val weekType: String = "",
+    val day: String = "",
+    val count: Int = 0,
+    val lessons: List<TeacherLessonDto> = emptyList(),
+) {
+    fun toDomain() = TeacherScheduleResult(
+        query = query,
+        weekType = weekType,
+        day = day,
+        count = count,
+        lessons = lessons.map { it.toDomain() },
+    )
+}
 
 /** Lightweight news feed fingerprint for background poll + notifications. */
 data class NewsUpdatesDto(

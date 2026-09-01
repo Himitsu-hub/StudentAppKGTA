@@ -32,7 +32,9 @@ struct TeachersView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(bg.ignoresSafeArea())
         .hideSystemNavBar()
-        .swipeBack {
+        // Disable system NavigationStack pop — otherwise swipe from teacher card
+        // races with our in-place back and jumps straight to Home.
+        .swipeBack(enableSystemPop: false) {
             if selectedTeacherName != nil {
                 selectedTeacherName = nil
             } else {
@@ -234,6 +236,8 @@ struct TeacherDetailView: View {
     @State private var teacher: Teacher?
     @State private var isLoading = true
     @State private var copied = false
+    @State private var todayLessons: [TeacherLesson] = []
+    @State private var lessonsLoading = false
 
     private var bg: Color { theme.isDark ? AppColors.darkNavy : AppColors.blueKGTA }
 
@@ -255,6 +259,8 @@ struct TeacherDetailView: View {
                         Text(teacher.position)
                             .foregroundStyle(theme.isDark ? AppColors.darkOnSurfaceMuted : Color.white.opacity(0.85))
                             .multilineTextAlignment(.center)
+
+                        todayBlock
 
                         if !teacher.email.isEmpty {
                             Button {
@@ -318,7 +324,63 @@ struct TeacherDetailView: View {
                 teacher = r.teachers.first { $0.name == teacherName }
                 isLoading = false
             }
+            await loadTodayLessons()
         }
+    }
+
+    private var todayBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Сегодня").font(.headline)
+                Spacer()
+                if lessonsLoading {
+                    ProgressView().scaleEffect(0.8)
+                }
+            }
+            if todayLessons.isEmpty && !lessonsLoading {
+                Text("Пар на сегодня не найдено (или выходной).")
+                    .font(.subheadline)
+                    .foregroundStyle(theme.isDark ? AppColors.darkOnSurfaceMuted : AppColors.textSecondary)
+            } else {
+                ForEach(todayLessons) { lesson in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(lesson.time).fontWeight(.bold)
+                            Spacer()
+                            Text(lesson.type).font(.caption)
+                        }
+                        Text(lesson.subject).fontWeight(.semibold)
+                        if !lesson.room.isEmpty {
+                            let online = lesson.room.localizedCaseInsensitiveContains("онлайн")
+                            Text(online ? "Формат: \(lesson.room)" : "каб. \(lesson.room)")
+                                .font(.caption)
+                                .foregroundStyle(online ? Color(red: 0.91, green: 0.38, blue: 0.30) : (theme.isDark ? AppColors.darkOnSurfaceMuted : AppColors.textSecondary))
+                        }
+                        if !lesson.group.isEmpty {
+                            Text("Группы: \(lesson.group)")
+                                .font(.caption)
+                                .foregroundStyle(theme.isDark ? AppColors.darkOnSurfaceMuted : AppColors.textSecondary)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(theme.isDark ? AppColors.darkButton : AppColors.lessonBgLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(theme.isDark ? AppColors.darkCard : Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .foregroundStyle(theme.isDark ? AppColors.darkOnSurface : AppColors.textPrimary)
+    }
+
+    private func loadTodayLessons() async {
+        lessonsLoading = true
+        defer { lessonsLoading = false }
+        let resp = await ScheduleRepository.shared.scheduleByTeacher(query: teacherName, day: "today")
+        todayLessons = resp.lessons
     }
 
     @ViewBuilder

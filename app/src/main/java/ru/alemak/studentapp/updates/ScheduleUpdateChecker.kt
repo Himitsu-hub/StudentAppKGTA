@@ -9,11 +9,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import ru.alemak.studentapp.BuildConfig
 import ru.alemak.studentapp.data.local.UserPreferences
+import ru.alemak.studentapp.data.model.FacultyCatalog
 import ru.alemak.studentapp.data.remote.ScheduleUpdatesDto
 
 /**
  * Polls GET /api/schedule-updates and notifies if the Excel for the
- * selected course changed on the server.
+ * selected faculty+course changed on the server.
  */
 object ScheduleUpdateChecker {
 
@@ -21,26 +22,34 @@ object ScheduleUpdateChecker {
         withContext(Dispatchers.IO) {
             try {
                 val prefs = UserPreferences(context.applicationContext)
+                val faculty = prefs.getSelectedFaculty()
                 val course = prefs.getSelectedCourse()
                 val updates = fetchUpdates() ?: return@withContext false
 
-                val remote = updates.courses.firstOrNull { it.course == course }
+                val remote = updates.courses.firstOrNull {
+                    it.course == course &&
+                        FacultyCatalog.normalize(it.faculty) == faculty
+                }
                 val remoteVersion = remote?.version.orEmpty()
                 if (remoteVersion.isBlank() || remote?.available != true) {
                     return@withContext false
                 }
 
-                val known = prefs.getScheduleVersion(course)
+                val known = prefs.getScheduleVersion(faculty, course)
                 if (known.isBlank()) {
                     // First run — remember, do not notify
-                    prefs.setScheduleVersion(course, remoteVersion)
+                    prefs.setScheduleVersion(faculty, course, remoteVersion)
                     return@withContext false
                 }
 
                 if (known != remoteVersion) {
-                    prefs.setScheduleVersion(course, remoteVersion)
+                    prefs.setScheduleVersion(faculty, course, remoteVersion)
                     if (notify) {
-                        ScheduleUpdateNotifier.show(context.applicationContext, course)
+                        ScheduleUpdateNotifier.show(
+                            context.applicationContext,
+                            faculty,
+                            course,
+                        )
                     }
                     return@withContext true
                 }

@@ -43,7 +43,33 @@ class ScheduleDay:
     lessons: List[Lesson] = field(default_factory=list)
 
 
-ALLOWED_PREFIXES = ["И", "У", "П", "ЭТ", "ЛТ"]
+# Longer prefixes first so "ТММ"/"ЭТ"/"КТ"/… win over shorter ones ("ТМ", "М").
+ALLOWED_PREFIXES = [
+    "ТММ",  # магистратура
+    "ЭТ",
+    "ЛТ",
+    "КТ",
+    "ТБ",
+    "ТМ",
+    "МР",
+    "ИС",
+    "НК",
+    "И",
+    "У",
+    "П",
+    "М",
+]
+
+# Spaced day titles in magistracy Excel: "П О Н Е Д Е Л Ь Н И К"
+_MASTERS_DAY_MAP = {
+    "понедельник": "Понедельник",
+    "вторник": "Вторник",
+    "среда": "Среда",
+    "четверг": "Четверг",
+    "пятница": "Пятница",
+    "суббота": "Суббота",
+    "воскресенье": "Воскресенье",
+}
 
 HOLIDAYS = {
     "01.01": "Новый год",
@@ -98,6 +124,25 @@ def get_semester_starts(now: Optional[datetime] = None) -> Tuple[datetime, datet
     return first, second
 
 
+def infer_course_from_group(group_name: str, now: Optional[datetime] = None) -> Optional[int]:
+    """
+    Derive course year from group code suffix (М-126 → 1, М-122 → 5 in 2026/27).
+    """
+    if not group_name:
+        return None
+    m = re.search(r"-(\d{2,3})\s*$", group_name.strip().upper())
+    if not m:
+        return None
+    yy = int(m.group(1)[-2:])
+    now = now or datetime.now()
+    start_year = now.year if now.month >= 9 else now.year - 1
+    entry = start_year % 100
+    course = entry - yy + 1
+    if 1 <= course <= 6:
+        return course
+    return None
+
+
 def get_current_week_type(now: Optional[datetime] = None) -> str:
     now = (now or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
     first, second = get_semester_starts(now)
@@ -141,12 +186,14 @@ def extract_group_name(text: Optional[str]) -> Optional[str]:
     if not text or not text.strip():
         return None
     cleaned = text.strip().upper().replace("\n", " ")
+    # "НК-123 3 подгруппа", "М-126 (СПВ)", "И-125"
     for prefix in ALLOWED_PREFIXES:
-        if cleaned.startswith(prefix):
-            # "П-122 (3 ПОДГРУППА)" / "ЭТ-122 (3 ПОДГРУППА)"
-            name = cleaned.split("(")[0].strip()
-            name = re.sub(r"\s+", "", name)
-            return name if name else None
+        m = re.match(
+            rf"^{re.escape(prefix)}\s*[-–]?\s*(\d{{2,3}})\b",
+            cleaned,
+        )
+        if m:
+            return f"{prefix}-{m.group(1)}"
     return None
 
 
@@ -242,11 +289,65 @@ def _columns_have_different_lessons(
 def clean_subject(s: str) -> str:
     # Remove only standalone type markers, never mid-word (Электротехника).
     s = re.sub(
-        r"(?i)\b(лекция|лек\.?|практика|практ\.?|прак\.?|лабораторн\w*|лаб\.?|л/р)\b\.?",
+        r"(?i)\b(лекция|лекц\.?|лек\.?|практика|практ\.?|прак\.?|лабораторн\w*|лаб\.?|л/р)\b\.?",
         "",
         s,
     )
+    # Keep «онлайн» in subject if it was on the title line; strip empty parens leftovers later.
     return re.sub(r"\s+", " ", s).strip(" .\t")
+
+
+_ONLINE_RE = re.compile(r"онлайн|дистанц(?:ионн\w*)?|в\s*сдо|\bzoom\b|\bteams\b", re.I)
+
+
+def _online_notes(text: str) -> List[str]:
+    """Parenthetical notes that mention online / distance learning."""
+    notes = []
+    for m in re.finditer(r"\(([^)]+)\)", text):
+        inner = m.group(1).strip()
+        if _ONLINE_RE.search(inner):
+            notes.append(inner)
+    return notes
+
+
+def _strip_online_markers(s: str) -> str:
+    s = re.sub(r"\(\s*[^)]*онлайн[^)]*\)", " ", s, flags=re.I)
+    s = re.sub(r"(?i)\bонлайн\b", " ", s)
+    return re.sub(r"\s+", " ", s).strip(" ,.;")
+
+
+def _is_pure_online_line(line: str) -> bool:
+    low = line.lower().strip().strip("()")
+    return bool(re.fullmatch(r"онлайн|дистанц(?:ионно|ионная форма)?", low))
+
+
+def _room_token_from_line(line: str) -> Optional[str]:
+    """
+    Extract a real classroom token. Skip week-range lines like
+    '(с 9 по 17 онлайн)' where the only digits are week numbers.
+    """
+    raw = line.strip()
+    low = raw.lower()
+    if _is_pure_online_line(raw):
+        return "онлайн"
+    # Pure week/online note without a classroom at the start
+    if re.match(r"^\(?\s*с\s*\d+", low) and ("нед" in low or _ONLINE_RE.search(low)):
+        return None
+    if _ONLINE_RE.search(low) and "нед" in low and not re.match(r"^\d{2,4}", raw):
+        return None
+
+    # "234 (с 1 по 8 нед)" → room 234
+    m = re.match(r"^(\d{2,4}[а-яА-Яa-zA-ZкКлЛ]?)\b", raw)
+    if m:
+        return m.group(1)
+
+    # Otherwise take last room-like token, but not digits after «по» in week ranges
+    cleaned = re.sub(r"с\s*\d+\s*по\s*\d+", " ", raw, flags=re.I)
+    cleaned = re.sub(r"с\s*\d+\s*нед", " ", cleaned, flags=re.I)
+    toks = re.findall(r"(\d{2,4}[а-яА-Яa-zA-ZкКлЛ]?)\b", cleaned)
+    if not toks:
+        return None
+    return toks[-1]
 
 
 def parse_lesson_text(text: str, time: str) -> Optional[Lesson]:
@@ -273,31 +374,69 @@ def parse_lesson_text(text: str, time: str) -> Optional[Lesson]:
         if "лек" not in text_lower and "практ" not in text_lower and "лаб" not in text_lower:
             lesson_type = "занятие"
 
+    online_notes = _online_notes(text)
+    is_online = bool(online_notes) or bool(_ONLINE_RE.search(text))
+
     room = ""
     teacher = ""
+    room_line_idx = None
     for i in range(len(lines) - 1, 0, -1):
-        # room often like "319", "704к", "234 (с 1 по 8 нед)"
-        room_match = re.search(r"(\d{2,4}\s*[а-яА-Яa-zA-ZкКлЛ]?)", lines[i])
-        if room_match and re.search(r"\d", lines[i]):
-            # Prefer trailing room token
-            tail = re.findall(r"(\d{2,4}[а-яА-Яa-zA-ZкКлЛ]?)", lines[i])
-            if tail:
-                room = tail[-1]
-                teacher = ", ".join(lines[1:i]) if i > 1 else lines[i][: lines[i].rfind(room)].strip(" ,")
-                # If teacher is empty, try same line before room
-                if not teacher and i == len(lines) - 1:
-                    before = lines[i][: lines[i].rfind(room)].strip(" ,")
-                    # skip pure week notes
-                    if before and "нед" not in before.lower():
-                        teacher = before
+        if _is_pure_online_line(lines[i]):
+            room = "онлайн"
+            room_line_idx = i
+            teacher = ", ".join(_strip_online_markers(x) for x in lines[1:i] if x)
+            teacher = re.sub(r"\s+,", ",", teacher).strip(" ,")
+            break
+        tok = _room_token_from_line(lines[i])
+        if tok:
+            room = tok
+            room_line_idx = i
+            # teacher = middle lines; strip online markers from teacher line
+            teacher_parts = []
+            for j in range(1, i):
+                part = _strip_online_markers(lines[j])
+                if part and not _is_pure_online_line(part):
+                    teacher_parts.append(part)
+            # same-line teacher before room
+            before = _strip_online_markers(lines[i][: lines[i].find(tok)].strip(" ,"))
+            if before and "нед" not in before.lower() and not _ONLINE_RE.search(before):
+                teacher_parts.append(before)
+            teacher = ", ".join(teacher_parts)
+            break
+
+    # Teacher on its own line with «(онлайн)» and no numeric room
+    if not teacher:
+        for j in range(1, len(lines)):
+            if j == room_line_idx:
+                continue
+            if _is_pure_online_line(lines[j]):
+                continue
+            if "нед" in lines[j].lower() and _ONLINE_RE.search(lines[j]):
+                continue
+            cand = _strip_online_markers(lines[j])
+            if cand and not re.fullmatch(r"\d{2,4}[а-яА-Яa-zA-ZкКлЛ]?", cand):
+                teacher = cand
                 break
 
     # Single-line: "ФИЗИЧЕСКАЯ КУЛЬТУРА и СПОРТ лек. 319"
     if not room and len(lines) == 1:
         m = re.search(r"(\d{2,4}[а-яА-Яa-zA-ZкКлЛ]?)\s*$", lines[0])
-        if m:
+        if m and "нед" not in lines[0].lower():
             room = m.group(1)
             subject = clean_subject(lines[0][: m.start()])
+
+    subject = _strip_online_markers(subject)
+
+    # Make online visible in the room field (UI already shows «Аудитория: …»)
+    if is_online:
+        note = "; ".join(online_notes) if online_notes else "онлайн"
+        # shorten pure online
+        if re.fullmatch(r"онлайн", note, re.I):
+            note = "онлайн"
+        if not room or room.lower() == "онлайн":
+            room = note if note else "онлайн"
+        elif "онлайн" not in room.lower():
+            room = f"{room} · {note}"
 
     return Lesson(time=time, subject=subject, teacher=teacher, room=room, type=lesson_type)
 
@@ -432,22 +571,203 @@ def close_workbook(adapter: SheetAdapter, wb: Any) -> None:
             pass
 
 
-def _group_header_span(sheet: SheetAdapter, col: int) -> Tuple[int, int]:
-    """Return (start_col, end_col) for group name cell / merge on row 2."""
+def _group_header_span(
+    sheet: SheetAdapter, col: int, group_row: int = 2
+) -> Tuple[int, int]:
+    """Return (start_col, end_col) for group name cell / merge on group_row."""
     start_col = col
     end_col = col
-    merge = sheet.find_merge(2, col)
-    if merge and merge["min_row"] <= 2 <= merge["max_row"]:
+    merge = sheet.find_merge(group_row, col)
+    if merge and merge["min_row"] <= group_row <= merge["max_row"]:
         start_col = merge["min_col"]
         end_col = merge["max_col"]
     return start_col, end_col
 
 
+def _detect_group_header_row(sheet: SheetAdapter) -> int:
+    """
+    АиЭ: group names on row 2; some МТФ on row 1; магистратура (ТММ-…) often on row 4.
+    Pick the row (1..6) with more recognized group names.
+    """
+    best_row, best_count = 2, 0
+    for row in range(1, 7):
+        seen = set()
+        count = 0
+        for col in range(sheet.max_column):
+            text = sheet.get_cell_text(row, col)
+            name = extract_group_name(text)
+            if name is None:
+                name = extract_group_name(sheet.get_text_with_merged(row, col))
+            if name and name not in seen:
+                seen.add(name)
+                count += 1
+        if count > best_count:
+            best_row, best_count = row, count
+    return best_row
+
+
+def _normalize_spaced_day(raw: str) -> Optional[str]:
+    """'П О Н Е Д Е Л Ь Н И К' / 'ПОНЕДЕЛЬНИК' → 'Понедельник'."""
+    if not raw:
+        return None
+    compact = re.sub(r"\s+", "", raw).lower().replace("ё", "е")
+    return _MASTERS_DAY_MAP.get(compact)
+
+
+def _normalize_masters_time(raw: str) -> str:
+    """'17.45  -  19.10' / '19.20\\n-\\n20-45' → '17:45-19:10'."""
+    if not raw:
+        return ""
+    s = raw.replace("\n", " ").replace("\r", " ")
+    s = s.replace(".", ":").replace("—", "-").replace("–", "-")
+    s = re.sub(r"\s+", "", s)
+    # '20-45' → '20:45' when used as mm part
+    s = re.sub(r"(\d{1,2})-(\d{2})(?=\d|\-|:|$)", r"\1:\2", s)
+    # After first replace we may get 17:45-19:10 or 17:45-:19:10 artifacts — clean
+    s = s.replace("::", ":")
+    m = re.search(r"(\d{1,2}:\d{2}).*?(\d{1,2}:\d{2})", s)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}"
+    return re.sub(r"\s+", " ", raw).strip()
+
+
+def looks_like_masters_sheet(sheet: SheetAdapter) -> bool:
+    """
+    True for magistracy evening grid (ТММ-…).
+
+    Important: bachelor Excel (АиЭ/МТФ) also uses spaced weekday titles
+    like «П О Н Е Д Е Л Ь Н И К» — that alone must NOT trigger masters mode,
+    otherwise subgroup detection breaks (extra «3 подгруппа» etc.).
+    """
+    has_tmm = False
+    has_classic_header_group = False
+    for row in range(min(8, sheet.max_row or 0)):
+        for col in range(min(sheet.max_column or 0, 40)):
+            t = sheet.get_cell_text(row, col) or ""
+            name = extract_group_name(t) or extract_group_name(
+                sheet.get_text_with_merged(row, col)
+            )
+            if not name:
+                continue
+            if name.startswith("ТММ"):
+                has_tmm = True
+            elif row <= 3:
+                # И-/У-/М-/КТ-… in the usual header rows ⇒ bachelor sheet
+                has_classic_header_group = True
+    if has_tmm:
+        return True
+    # Fallback: compact sheet without classic groups (rare)
+    if not has_classic_header_group and (sheet.max_row or 0) <= 45:
+        for row in range(min(12, sheet.max_row or 0)):
+            if _normalize_spaced_day(sheet.get_cell_text(row, 0) or ""):
+                return True
+    return False
+
+
+def parse_masters_groups(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
+    """
+    Magistracy header:
+      row with ТММ-125
+      next row: I подгруппа | II подгруппа under lesson columns
+    """
+    groups: Dict[str, GroupInfo] = {}
+    group_row = _detect_group_header_row(sheet)
+    sub_row = group_row + 1
+
+    for col in range(sheet.max_column):
+        name = extract_group_name(sheet.get_cell_text(group_row, col))
+        if name is None:
+            name = extract_group_name(sheet.get_text_with_merged(group_row, col))
+        if not name:
+            continue
+        if name in groups:
+            continue
+        info = GroupInfo(group_name=name)
+        # Collect unique subgroup tracks on the next row (I / II …)
+        for c in range(sheet.max_column):
+            sub = extract_subgroup(sheet.get_text_with_merged(sub_row, c)) or extract_subgroup(
+                sheet.get_cell_text(sub_row, c)
+            )
+            if not sub:
+                continue
+            if any(s.name == sub for s in info.subgroups):
+                continue
+            info.subgroups.append(SubgroupInfo(name=sub, column=c))
+        if not info.subgroups:
+            info.subgroups.append(SubgroupInfo(name="1 подгруппа", column=col))
+        groups[name] = info
+    return groups
+
+
+def parse_masters_schedule_for_group(
+    sheet: SheetAdapter,
+    group_name: str,
+    subgroup: Optional[str],
+    week_type: str,
+) -> List[ScheduleDay]:
+    """
+    Evening magistracy grid: day title in col0, pair#, time, week label, then subgroup cols.
+    """
+    groups = parse_masters_groups(sheet)
+    info = groups.get(group_name)
+    if not info or not info.subgroups:
+        return []
+
+    # Resolve subgroup column
+    col = info.subgroups[0].column
+    if subgroup:
+        for s in info.subgroups:
+            if s.name == subgroup or subgroup in s.name or s.name in subgroup:
+                col = s.column
+                break
+        # also accept "1 подгруппа" vs "I подгруппа"
+        want = subgroup.lower().replace("ё", "е")
+        for s in info.subgroups:
+            if "1" in want and ("1" in s.name or s.name.lower().startswith("i")):
+                col = s.column
+                break
+            if "2" in want and ("2" in s.name or "ii" in s.name.lower()):
+                col = s.column
+                break
+
+    week_key = "числитель" if week_type == "Числитель" else "знаменатель"
+    by_day: Dict[str, List[Lesson]] = {d: [] for d in _MASTERS_DAY_MAP.values() if d != "Воскресенье"}
+    current_day: Optional[str] = None
+
+    for row in range(sheet.max_row or 0):
+        day_raw = sheet.get_cell_text(row, 0) or ""
+        day = _normalize_spaced_day(day_raw)
+        if day:
+            current_day = day
+
+        week_raw = (sheet.get_cell_text(row, 3) or sheet.get_text_with_merged(row, 3) or "").strip().lower()
+        if week_key not in week_raw:
+            continue
+        if not current_day:
+            continue
+
+        text = sheet.get_text_with_merged(row, col) or sheet.get_cell_text(row, col) or ""
+        if not text.strip() or text.strip() in ("-", "null"):
+            continue
+
+        time_raw = sheet.get_cell_text(row, 2) or sheet.get_text_with_merged(row, 2) or ""
+        # Sometimes time only on числитель row — look one row up
+        if not time_raw.strip() and row > 0:
+            time_raw = sheet.get_cell_text(row - 1, 2) or ""
+        time = _normalize_masters_time(time_raw)
+        lesson = parse_lesson_text(text, time or time_raw.strip())
+        if lesson:
+            by_day.setdefault(current_day, []).append(lesson)
+
+    order = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"]
+    return [ScheduleDay(day_name=d, lessons=by_day.get(d, [])) for d in order]
+
+
 def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
     """
     Header:
-      row 2 — group names (may be merged across subgroup columns)
-      row 3 — optional "N подгруппа"
+      group_row — group names (may be merged across subgroup columns)
+      group_row+1 — optional "N подгруппа"
     Same group can appear in several blocks (e.g. main + 3-я подгруппа).
 
     Important: for И-125 the name is often merged over cols of 1-я and 2-я
@@ -455,6 +775,8 @@ def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
     """
     groups: Dict[str, GroupInfo] = {}
     last_col = sheet.max_column
+    group_row = _detect_group_header_row(sheet)
+    sub_row = group_row + 1
 
     # Collect ordered group anchors: (start_col, end_col, group_name)
     anchors: List[Tuple[int, int, str]] = []
@@ -464,19 +786,44 @@ def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
         if col in seen_cols:
             continue
 
-        text = sheet.get_cell_text(2, col)
+        text = sheet.get_cell_text(group_row, col)
         group_name = extract_group_name(text)
         if group_name is None:
-            merged_text = sheet.get_text_with_merged(2, col)
+            merged_text = sheet.get_text_with_merged(group_row, col)
             group_name = extract_group_name(merged_text)
 
         if group_name is None:
             continue
 
-        start_col, end_col = _group_header_span(sheet, col)
+        start_col, end_col = _group_header_span(sheet, col, group_row=group_row)
         for c in range(start_col, end_col + 1):
             seen_cols.add(c)
         anchors.append((start_col, end_col, group_name))
+
+    # МТФ 4–5: "5 курс" on group_row, actual name (М-122) on the next row
+    for col in range(last_col):
+        if col in seen_cols:
+            continue
+        label = (sheet.get_cell_text(group_row, col) or "").strip().lower()
+        if "курс" not in label and not extract_group_name(
+            sheet.get_cell_text(group_row, col)
+        ):
+            # still try subgroup row for orphan group names
+            pass
+        name = extract_group_name(sheet.get_cell_text(sub_row, col))
+        if name is None:
+            name = extract_group_name(sheet.get_text_with_merged(sub_row, col))
+        if name is None:
+            continue
+        if any(a[2] == name for a in anchors):
+            continue
+        start_col, end_col = col, col
+        merge = sheet.find_merge(sub_row, col)
+        if merge and merge["min_row"] <= sub_row <= merge["max_row"]:
+            start_col, end_col = merge["min_col"], merge["max_col"]
+        for c in range(start_col, end_col + 1):
+            seen_cols.add(c)
+        anchors.append((start_col, end_col, name))
 
     anchors.sort(key=lambda a: a[0])
 
@@ -486,7 +833,11 @@ def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
         else:
             block_end = last_col - 1
             for c in range(end_col + 1, last_col):
-                t = (sheet.get_cell_text(2, c) or sheet.get_text_with_merged(2, c) or "")
+                t = (
+                    sheet.get_cell_text(group_row, c)
+                    or sheet.get_text_with_merged(group_row, c)
+                    or ""
+                )
                 tl = t.strip().lower().replace("\n", " ")
                 if tl in ("время", "№ пары", "день недели", "день недели"):
                     block_end = c - 1
@@ -506,14 +857,14 @@ def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
                 return
             found.append((name, c))
 
-        # 1) Explicit labels on row 3 (resolve merges — "2 подгруппа" may sit in a merge)
+        # 1) Explicit labels on subgroup row (resolve merges — "2 подгруппа" may sit in a merge)
         for c in range(start_col, block_end + 1):
-            sub_text = sheet.get_text_with_merged(3, c)
+            sub_text = sheet.get_text_with_merged(sub_row, c)
             if not sub_text:
-                sub_text = sheet.get_cell_text(3, c)
-            # also plain row 2 cell if subgroup written into group header
+                sub_text = sheet.get_cell_text(sub_row, c)
+            # also plain group_row cell if subgroup written into group header
             if not sub_text:
-                raw2 = sheet.get_cell_text(2, c)
+                raw2 = sheet.get_cell_text(group_row, c)
                 if raw2 and extract_subgroup(raw2):
                     sub_text = raw2
             subgroup = extract_subgroup(sub_text)
@@ -566,10 +917,10 @@ def parse_groups_from_header(sheet: SheetAdapter) -> Dict[str, GroupInfo]:
             for c in range(start_col + 1, block_end + 1):
                 if any(col == c for _, col in found):
                     continue
-                gn = extract_group_name(sheet.get_text_with_merged(2, c))
+                gn = extract_group_name(sheet.get_text_with_merged(group_row, c))
                 if gn and gn != group_name:
                     break
-                sub = extract_subgroup(sheet.get_text_with_merged(3, c))
+                sub = extract_subgroup(sheet.get_text_with_merged(sub_row, c))
                 if sub:
                     add_track(sub, c)
 
@@ -739,6 +1090,12 @@ def parse_schedule_for_group(
 ) -> List[ScheduleDay]:
     sheet, wb = open_workbook(file_path)
     try:
+        active_week = week_type or get_current_week_type()
+        if looks_like_masters_sheet(sheet):
+            return parse_masters_schedule_for_group(
+                sheet, group_name, subgroup, active_week
+            )
+
         groups = parse_groups_from_header(sheet)
         # normalize group name lookup
         lookup = group_name.strip().upper().replace(" ", "")
@@ -764,7 +1121,6 @@ def parse_schedule_for_group(
         if subgroup_column is None:
             return []
 
-        active_week = week_type or get_current_week_type()
         result: List[ScheduleDay] = []
 
         for day_name, start_row in DAY_START_ROWS.items():
@@ -793,7 +1149,10 @@ def parse_schedule_for_group(
 def get_groups_from_file(file_path: str) -> Dict[str, List[str]]:
     sheet, wb = open_workbook(file_path)
     try:
-        groups = parse_groups_from_header(sheet)
+        if looks_like_masters_sheet(sheet):
+            groups = parse_masters_groups(sheet)
+        else:
+            groups = parse_groups_from_header(sheet)
         return {name: [s.name for s in info.subgroups] for name, info in groups.items()}
     finally:
         close_workbook(sheet, wb)

@@ -28,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -37,6 +38,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +54,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import ru.alemak.studentapp.data.model.FacultyCatalog
 import ru.alemak.studentapp.data.model.Teacher
+import ru.alemak.studentapp.data.model.TeacherLesson
 import ru.alemak.studentapp.ui.components.AppTopBar
 import ru.alemak.studentapp.ui.components.ErrorState
 import ru.alemak.studentapp.ui.components.LoadingState
@@ -220,14 +224,16 @@ fun TeacherDetailScreen(
     viewModel: TeachersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val today by viewModel.todayState.collectAsStateWithLifecycle()
     val teacher = state.teachers.find { it.name == teacherName }
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
 
-    androidx.compose.runtime.LaunchedEffect(teacherName) {
+    LaunchedEffect(teacherName) {
         if (state.teachers.none { it.name == teacherName }) {
             viewModel.refresh()
         }
+        viewModel.loadTodayLessons(teacherName)
     }
 
     Scaffold(
@@ -293,6 +299,13 @@ fun TeacherDetailScreen(
                 )
                 Spacer(Modifier.height(20.dp))
 
+                TeacherTodayBlock(
+                    lessons = today.lessons,
+                    isLoading = today.isLoading && today.loadedFor == teacherName,
+                    onBlue = onBlue,
+                )
+                Spacer(Modifier.height(12.dp))
+
                 if (teacher.email.isNotEmpty()) {
                     val emailCardBg = if (onBlue) {
                         Color.White.copy(alpha = 0.15f)
@@ -326,6 +339,30 @@ fun TeacherDetailScreen(
                     }
                     Spacer(Modifier.height(12.dp))
                 }
+
+                if (teacher.subjects.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = scheme.surface),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                "Предметы",
+                                fontWeight = FontWeight.Bold,
+                                color = scheme.onSurface,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            teacher.subjects.forEach { subject ->
+                                Text(
+                                    "• $subject",
+                                    color = scheme.onSurface,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
             }
 
             Button(
@@ -338,6 +375,110 @@ fun TeacherDetailScreen(
                 ),
             ) {
                 Text("Назад")
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeacherTodayBlock(
+    lessons: List<TeacherLesson>,
+    isLoading: Boolean,
+    onBlue: Boolean,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val cardBg = scheme.surface
+    val lessonBg = if (onBlue || scheme.background == BlueKGTA) {
+        Color(0xFFF0F3F8)
+    } else {
+        scheme.surfaceVariant
+    }
+    val muted = scheme.onSurfaceVariant
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Сегодня",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = scheme.onSurface,
+                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            when {
+                isLoading && lessons.isEmpty() -> {
+                    Text("Загружаем пары…", color = muted, style = MaterialTheme.typography.bodySmall)
+                }
+                lessons.isEmpty() -> {
+                    Text(
+                        "Пар на сегодня не найдено (или выходной).",
+                        color = muted,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                else -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        lessons.forEach { lesson ->
+                            TeacherTodayLessonCard(lesson, lessonBg, muted)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeacherTodayLessonCard(
+    lesson: TeacherLesson,
+    lessonBg: Color,
+    muted: Color,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = lessonBg),
+        shape = RoundedCornerShape(10.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(lesson.time, fontWeight = FontWeight.Bold, color = scheme.onSurface)
+                if (lesson.type.isNotBlank()) {
+                    Text(lesson.type, style = MaterialTheme.typography.bodySmall, color = muted)
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(lesson.subject, fontWeight = FontWeight.SemiBold, color = scheme.onSurface)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (lesson.room.isNotBlank()) {
+                    Text("каб. ${lesson.room}", style = MaterialTheme.typography.bodySmall, color = muted)
+                }
+                if (lesson.group.isNotBlank()) {
+                    Text(lesson.group, style = MaterialTheme.typography.bodySmall, color = muted)
+                }
+                if (lesson.faculty.isNotBlank()) {
+                    Text(
+                        FacultyCatalog.shortName(lesson.faculty),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = muted,
+                    )
+                }
             }
         }
     }

@@ -8,9 +8,11 @@ import javax.inject.Singleton
 import ru.alemak.studentapp.data.local.GroupsCacheEntity
 import ru.alemak.studentapp.data.local.ScheduleCacheEntity
 import ru.alemak.studentapp.data.local.ScheduleDao
+import ru.alemak.studentapp.data.model.FacultyCatalog
 import ru.alemak.studentapp.data.model.Lesson
 import ru.alemak.studentapp.data.model.NextLessonInfo
 import ru.alemak.studentapp.data.model.ScheduleResult
+import ru.alemak.studentapp.data.model.TeacherScheduleResult
 import ru.alemak.studentapp.data.remote.ScheduleApi
 import ru.alemak.studentapp.util.DateUtils
 
@@ -19,26 +21,40 @@ class ScheduleRepository @Inject constructor(
     private val api: ScheduleApi,
     private val scheduleDao: ScheduleDao,
 ) {
-    suspend fun getGroups(course: Int): Map<String, List<String>> {
-        val remote = runCatching { api.getGroups(course) }.getOrNull()
+    suspend fun getGroups(
+        faculty: String = FacultyCatalog.FAE,
+        course: Int,
+    ): Map<String, List<String>> {
+        val fid = FacultyCatalog.normalize(faculty)
+        val key = groupsCacheKey(fid, course)
+        val remote = runCatching { api.getGroups(fid, course) }.getOrNull()
         if (remote != null) {
-            scheduleDao.upsertGroups(GroupsCacheEntity(course, remote))
+            scheduleDao.upsertGroups(
+                GroupsCacheEntity(
+                    cacheKey = key,
+                    faculty = fid,
+                    course = course,
+                    groups = remote,
+                ),
+            )
             return remote
         }
-        return scheduleDao.getGroups(course)?.groups.orEmpty()
+        return scheduleDao.getGroups(key)?.groups.orEmpty()
     }
 
     suspend fun getSchedule(
+        faculty: String = FacultyCatalog.FAE,
         course: Int,
         group: String,
         subgroup: String?,
     ): ScheduleResult {
+        val fid = FacultyCatalog.normalize(faculty)
         val weekType = DateUtils.getCurrentWeekType()
-        val key = cacheKey(course, group, subgroup, weekType)
+        val key = cacheKey(fid, course, group, subgroup, weekType)
 
         // Always try server first
         val remote = runCatching {
-            api.getSchedule(course, group, subgroup).toDomain(isOffline = false)
+            api.getSchedule(fid, course, group, subgroup).toDomain(isOffline = false)
         }.getOrNull()
 
         if (remote != null) {
@@ -58,6 +74,7 @@ class ScheduleRepository @Inject constructor(
         }
 
         val cached = scheduleDao.getSchedule(key)
+            ?: scheduleDao.getSchedule(legacyCacheKey(course, group, subgroup, weekType))
         if (cached != null) {
             return ScheduleResult(
                 course = cached.course,
@@ -83,8 +100,24 @@ class ScheduleRepository @Inject constructor(
         )
     }
 
-    suspend fun getNextLesson(course: Int, group: String, subgroup: String?): Lesson? {
-        val result = getSchedule(course, group, subgroup)
+    suspend fun scheduleByTeacher(
+        query: String,
+        day: String = "today",
+    ): TeacherScheduleResult {
+        return runCatching {
+            api.getScheduleByTeacher(query = query, day = day).toDomain()
+        }.getOrElse {
+            TeacherScheduleResult(query = query, day = day)
+        }
+    }
+
+    suspend fun getNextLesson(
+        faculty: String = FacultyCatalog.FAE,
+        course: Int,
+        group: String,
+        subgroup: String?,
+    ): Lesson? {
+        val result = getSchedule(faculty, course, group, subgroup)
         return findNextLesson(result.schedule)
     }
 
@@ -136,6 +169,22 @@ class ScheduleRepository @Inject constructor(
         return null
     }
 
-    private fun cacheKey(course: Int, group: String, subgroup: String?, weekType: String): String =
-        "$course:$group:${subgroup.orEmpty()}:$weekType"
+    private fun groupsCacheKey(faculty: String, course: Int): String =
+        "${FacultyCatalog.normalize(faculty)}_$course"
+
+    private fun cacheKey(
+        faculty: String,
+        course: Int,
+        group: String,
+        subgroup: String?,
+        weekType: String,
+    ): String = "${FacultyCatalog.normalize(faculty)}:$course:$group:${subgroup.orEmpty()}:$weekType"
+
+    /** Pre-multi-faculty installs used course-only keys. */
+    private fun legacyCacheKey(
+        course: Int,
+        group: String,
+        subgroup: String?,
+        weekType: String,
+    ): String = "$course:$group:${subgroup.orEmpty()}:$weekType"
 }

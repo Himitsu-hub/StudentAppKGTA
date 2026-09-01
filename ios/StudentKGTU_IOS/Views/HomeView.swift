@@ -36,8 +36,8 @@ struct HomeView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Below Dynamic Island, but not too much empty space (~half of previous gap).
-            let topInset = geo.safeAreaInsets.top + 12
+            // Below Dynamic Island — slightly tighter so lesson/buttons/news sit a bit higher.
+            let topInset = geo.safeAreaInsets.top + 4
             let pullY = isPullRefreshing ? pullThreshold * 0.55 : max(0, pullDistance * 0.35)
 
             ZStack(alignment: .top) {
@@ -68,12 +68,12 @@ struct HomeView: View {
                         .padding(.horizontal, 8)
                         .padding(.top, 2)
 
-                        VStack(spacing: 8) {
+                        VStack(spacing: 6) {
                             Image("KgtaLogo")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 168, height: 168)
-                                .padding(.top, -2)
+                                .padding(.top, -6)
 
                             Text(headerWeekLine)
                                 .font(.system(size: 20, weight: .bold))
@@ -93,7 +93,7 @@ struct HomeView: View {
                                 nextLessonBlock
                             }
 
-                            Spacer(minLength: 8)
+                            Spacer(minLength: 2)
 
                             navButton("Расписание") { path.append(AppRoute.schedule) }
                             navButton("Преподаватели") { path.append(AppRoute.teachers) }
@@ -109,8 +109,8 @@ struct HomeView: View {
 
                     newsSection
                         .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                        .padding(.bottom, 12)
+                        .padding(.top, 2)
+                        .padding(.bottom, 10)
                 }
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
                 .offset(y: pullY)
@@ -143,6 +143,9 @@ struct HomeView: View {
                 }
             }
         }
+        .onChange(of: prefs.faculty) { _, _ in
+            Task { await refresh(showLoading: false) }
+        }
         .onChange(of: prefs.course) { _, _ in
             Task { await refresh(showLoading: false) }
         }
@@ -174,21 +177,22 @@ struct HomeView: View {
                     isPullRefreshing = true
                     pullDistance = pullThreshold
                     Task {
+                        // Always stop the spinner — even if API is slow/down
+                        defer {
+                            Task { @MainActor in
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    isPullRefreshing = false
+                                    pullDistance = 0
+                                }
+                            }
+                        }
                         await refresh(showLoading: false)
-                        // Server kicks background scrape on force=true; one more pass picks it up
-                        try? await Task.sleep(nanoseconds: 1_200_000_000)
+                        // One light pass without force (cache-first on server)
                         _ = await loadNews(force: false)
                         if let label = TimeFormat.updatedAtLabel(
                             millis: NewsRepository.shared.getNewsFromCacheOnly(limit: 1).updatedAt
                         ) {
                             updatedLabel = label
-                        }
-                        _ = await NewsUpdateChecker.check(notify: false)
-                        await MainActor.run {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                isPullRefreshing = false
-                                pullDistance = 0
-                            }
                         }
                     }
                 } else {
@@ -219,17 +223,26 @@ struct HomeView: View {
                     .foregroundStyle(onHome)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
+                let isOnline = lesson.room.localizedCaseInsensitiveContains("онлайн")
                 let details: String = {
                     var s = ""
                     if !lesson.time.isEmpty { s = lesson.time }
                     if !lesson.room.isEmpty {
                         if !s.isEmpty { s += "  •  " }
-                        s += "каб. \(lesson.room)"
+                        if isOnline && lesson.room.lowercased() == "онлайн" {
+                            s += "онлайн"
+                        } else if isOnline {
+                            s += lesson.room
+                        } else {
+                            s += "каб. \(lesson.room)"
+                        }
                     }
                     return s
                 }()
                 if !details.isEmpty {
-                    Text(details).font(.system(size: 15)).foregroundStyle(onHome.opacity(0.9))
+                    Text(details)
+                        .font(.system(size: 15))
+                        .foregroundStyle(isOnline ? Color(red: 1, green: 0.75, blue: 0.7) : onHome.opacity(0.9))
                 }
                 if !lesson.teacher.isEmpty {
                     Text(lesson.teacher)
@@ -445,6 +458,7 @@ struct HomeView: View {
             nextLesson = nil
         } else if let group = prefs.group, !group.isEmpty {
             if let cached = ScheduleRepository.shared.getScheduleFromCacheOnly(
+                faculty: prefs.faculty,
                 course: prefs.course,
                 group: group,
                 subgroup: prefs.subgroup
@@ -476,6 +490,7 @@ struct HomeView: View {
             return LoadMeta(fromCache: false, updatedAt: 0)
         }
         let result = await ScheduleRepository.shared.getSchedule(
+            faculty: prefs.faculty,
             course: prefs.course,
             group: group,
             subgroup: prefs.subgroup

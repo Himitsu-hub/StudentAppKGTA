@@ -4,6 +4,7 @@ import hmac
 import json
 import shutil
 import tempfile
+import time
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,13 +24,26 @@ from database import (
     get_db,
     init_db,
 )
+from faculties import (
+    DEFAULT_FACULTY,
+    courses_for,
+    faculty_meta,
+    list_faculties,
+    needs_course_filter,
+    normalize_faculty,
+    resolve_schedule_path,
+    target_filename,
+)
 from parser import (
     get_current_week_type,
     get_groups_from_file,
+    get_today_name,
+    infer_course_from_group,
     parse_schedule_for_group,
     schedule_to_dict,
 )
 from schedule_validator import validate_schedule_file
+from teacher_match import teachers_match
 
 load_dotenv()
 
@@ -92,19 +106,47 @@ def schedule_days_from_json(raw: list) -> list[dict]:
     return raw if isinstance(raw, list) else []
 
 
-def index_course_file(db: Session, course: int, filename: str = "") -> tuple[int, int]:
-    """Parse Excel for a course and cache all groups × week types in SQLite."""
-    file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
-    if not file_path.exists():
-        raise FileNotFoundError(f"Schedule for course {course} not found")
+def _filter_groups_for_course(
+    faculty: str, course: int, groups: dict
+) -> dict:
+    """For shared Excel (МТФ 4–5) keep only groups belonging to this course year."""
+    if not needs_course_filter(faculty, course):
+        return groups
+    filtered = {}
+    for name, subs in groups.items():
+        inferred = infer_course_from_group(name)
+        if inferred == course:
+            filtered[name] = subs
+    return filtered
 
-    groups = get_groups_from_file(str(file_path))
+
+def index_course_file(
+    db: Session,
+    course: int,
+    filename: str = "",
+    faculty: str = DEFAULT_FACULTY,
+) -> tuple[int, int]:
+    """Parse Excel for a faculty+course and cache all groups × week types in SQLite."""
+    faculty = normalize_faculty(faculty)
+    file_path = resolve_schedule_path(UPLOAD_DIR, faculty, course)
+    if file_path is None:
+        raise FileNotFoundError(f"Schedule for {faculty} course {course} not found")
+
+    groups = _filter_groups_for_course(
+        faculty, course, get_groups_from_file(str(file_path))
+    )
     total_lessons = 0
 
-    db.query(ScheduleRecord).filter(ScheduleRecord.course == course).delete()
-    db.query(GroupsCache).filter(GroupsCache.course == course).delete()
+    db.query(ScheduleRecord).filter(
+        ScheduleRecord.faculty == faculty,
+        ScheduleRecord.course == course,
+    ).delete()
+    db.query(GroupsCache).filter(
+        GroupsCache.faculty == faculty,
+        GroupsCache.course == course,
+    ).delete()
 
-    db.add(GroupsCache(course=course, groups_json=groups))
+    db.add(GroupsCache(faculty=faculty, course=course, groups_json=groups))
 
     for group_name, subgroups in groups.items():
         for sub in subgroups or [""]:
@@ -116,6 +158,7 @@ def index_course_file(db: Session, course: int, filename: str = "") -> tuple[int
                     total_lessons += len(day.lessons)
                 db.add(
                     ScheduleRecord(
+                        faculty=faculty,
                         course=course,
                         group_name=group_name,
                         subgroup=sub or "",
@@ -128,20 +171,38 @@ def index_course_file(db: Session, course: int, filename: str = "") -> tuple[int
     return len(groups), total_lessons
 
 
-def ensure_course_indexed(db: Session, course: int, force: bool = False) -> None:
+def ensure_course_indexed(
+    db: Session,
+    course: int,
+    force: bool = False,
+    faculty: str = DEFAULT_FACULTY,
+) -> None:
     """Cache Excel → JSON in SQLite. force=True rebuilds (needed after parser updates)."""
+    faculty = normalize_faculty(faculty)
     if not force:
         exists = (
             db.query(ScheduleRecord.id)
-            .filter(ScheduleRecord.course == course)
+            .filter(
+                ScheduleRecord.faculty == faculty,
+                ScheduleRecord.course == course,
+            )
             .limit(1)
             .first()
         )
         if exists:
             return
-    file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
-    if file_path.exists():
-        index_course_file(db, course)
+    file_path = resolve_schedule_path(UPLOAD_DIR, faculty, course)
+    if file_path is not None:
+        index_course_file(db, course, faculty=faculty)
+
+
+def ensure_all_indexed(db: Session, force: bool = False) -> None:
+    for fac in list_faculties():
+        for course in fac["courses"]:
+            try:
+                ensure_course_indexed(db, course, force=force, faculty=fac["id"])
+            except Exception as exc:
+                print(f"Index {fac['id']} course {course}: {exc}")
 
 
 def _news_refresh_loop(interval_sec: int = 90) -> None:
@@ -170,17 +231,63 @@ def _news_refresh_loop(interval_sec: int = 90) -> None:
     t.start()
 
 
+def _teachers_stale(max_age_sec: int = 24 * 3600) -> bool:
+    if not TEACHERS_FILE.exists():
+        return True
+    try:
+        age = time.time() - TEACHERS_FILE.stat().st_mtime
+        return age > max_age_sec
+    except OSError:
+        return True
+
+
+def refresh_teachers(force: bool = False) -> dict:
+    """Scrape dksta.ru ППС → teachers.json. Safe to call from a background thread."""
+    if not force and not _teachers_stale():
+        return {"status": "fresh", "count": _teachers_count()}
+    from scraper import scrape_all
+
+    teachers = scrape_all()
+    return {"status": "updated", "count": len(teachers or [])}
+
+
+def _teachers_count() -> int:
+    try:
+        if not TEACHERS_FILE.exists():
+            return 0
+        with open(TEACHERS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return len(data) if isinstance(data, list) else 0
+    except Exception:
+        return 0
+
+
+def _teachers_refresh_loop(interval_sec: int = 12 * 3600) -> None:
+    """Background: refresh teachers directory from the university site ~every 12h."""
+    import threading
+    import time
+
+    def worker() -> None:
+        time.sleep(45)  # let API finish startup / indexing first
+        while True:
+            try:
+                result = refresh_teachers(force=False)
+                print(f"[teachers-loop] {result}")
+            except Exception as exc:
+                print(f"[teachers-loop] error: {exc}")
+            time.sleep(interval_sec)
+
+    t = threading.Thread(target=worker, name="teachers-refresh", daemon=True)
+    t.start()
+
+
 @app.on_event("startup")
 def startup():
     init_db()
     db = next(get_db())
     try:
         # Always re-parse on startup so fixes in parser.py are reflected in JSON cache
-        for course in range(1, 5):
-            try:
-                ensure_course_indexed(db, course, force=True)
-            except Exception as exc:
-                print(f"Startup index course {course}: {exc}")
+        ensure_all_indexed(db, force=True)
     finally:
         db.close()
 
@@ -192,6 +299,18 @@ def startup():
     except Exception as exc:
         print(f"[news] startup scrape: {exc}")
     _news_refresh_loop(90)
+
+    # Teachers directory: refresh in background if older than 24h, then every 12h
+    import threading
+
+    def _teachers_startup():
+        try:
+            print(f"[teachers] startup refresh → {refresh_teachers(force=False)}")
+        except Exception as exc:
+            print(f"[teachers] startup scrape: {exc}")
+
+    threading.Thread(target=_teachers_startup, name="teachers-startup", daemon=True).start()
+    _teachers_refresh_loop(12 * 3600)
 
 
 @app.get("/health")
@@ -236,7 +355,30 @@ def get_teachers():
         for t in teachers:
             if isinstance(t, dict) and "position" in t:
                 t["position"] = _normalize_teacher_position(str(t.get("position") or ""))
-    return {"teachers": teachers}
+    meta = {}
+    try:
+        st = TEACHERS_FILE.stat()
+        meta = {
+            "updatedAt": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+            "count": len(teachers) if isinstance(teachers, list) else 0,
+        }
+    except OSError:
+        pass
+    return {"teachers": teachers, **meta}
+
+
+@app.post("/admin/refresh-teachers")
+def admin_refresh_teachers(
+    password: str = Form(...),
+    force: str = Form("true"),
+):
+    """Manual scrape of university ППС pages → teachers.json."""
+    verify_admin_password(password)
+    do_force = str(force).lower() in ("1", "true", "yes", "on")
+    try:
+        return refresh_teachers(force=do_force)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/news")
@@ -271,14 +413,60 @@ def news_updates():
     return news_updates_payload()
 
 
+@app.get("/api/faculties")
+def get_faculties(db: Session = Depends(get_db)):
+    """List faculties and which courses have schedule files / cache."""
+    result = []
+    for fac in list_faculties():
+        fid = fac["id"]
+        courses = []
+        for course in fac["courses"]:
+            path = resolve_schedule_path(UPLOAD_DIR, fid, course)
+            cached = (
+                db.query(ScheduleRecord.id)
+                .filter(
+                    ScheduleRecord.faculty == fid,
+                    ScheduleRecord.course == course,
+                )
+                .limit(1)
+                .first()
+                is not None
+            )
+            courses.append(
+                {
+                    "course": course,
+                    "available": path is not None or cached,
+                }
+            )
+        result.append(
+            {
+                "id": fid,
+                "short": fac["short"],
+                "name": fac["name"],
+                "courses": courses,
+            }
+        )
+    return {"faculties": result, "defaultFaculty": DEFAULT_FACULTY}
+
+
 @app.get("/api/courses")
-def get_courses(db: Session = Depends(get_db)):
+def get_courses(
+    faculty: str = Query(DEFAULT_FACULTY),
+    db: Session = Depends(get_db),
+):
+    try:
+        fid = normalize_faculty(faculty)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     courses = []
-    for i in range(1, 5):
-        f = UPLOAD_DIR / f"schedule{i}.xlsx"
+    for i in courses_for(fid):
+        path = resolve_schedule_path(UPLOAD_DIR, fid, i)
         cached = (
             db.query(ScheduleRecord.id)
-            .filter(ScheduleRecord.course == i)
+            .filter(
+                ScheduleRecord.faculty == fid,
+                ScheduleRecord.course == i,
+            )
             .limit(1)
             .first()
             is not None
@@ -286,7 +474,8 @@ def get_courses(db: Session = Depends(get_db)):
         courses.append(
             {
                 "course": i,
-                "available": f.exists() or cached,
+                "faculty": fid,
+                "available": path is not None or cached,
             }
         )
     return courses
@@ -297,24 +486,23 @@ def week_type():
     return {"weekType": get_current_week_type()}
 
 
-def _course_file_version(course: int) -> Optional[dict]:
+def _course_file_version(faculty: str, course: int) -> Optional[dict]:
     """
     Stable version for a course schedule file.
     Changes only when the Excel on disk is replaced (mtime/size),
     not when the server merely re-indexes JSON cache.
     """
-    path = UPLOAD_DIR / f"schedule{course}.xlsx"
-    if not path.exists():
+    path = resolve_schedule_path(UPLOAD_DIR, faculty, course)
+    if path is None:
         return None
     try:
         st = path.stat()
     except OSError:
         return None
     version = f"{int(st.st_mtime)}-{st.st_size}"
-    from datetime import datetime, timezone
-
     updated_at = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat()
     return {
+        "faculty": faculty,
         "course": course,
         "version": version,
         "updatedAt": updated_at,
@@ -323,32 +511,53 @@ def _course_file_version(course: int) -> Optional[dict]:
 
 
 @app.get("/api/schedule-updates")
-def schedule_updates():
+def schedule_updates(faculty: Optional[str] = Query(None)):
     """
     Lightweight endpoint for the app to detect new Excel uploads.
     Clients poll this (e.g. every 15 min) and show a push-style notification
     when their course version changes.
     """
+    faculties = []
+    if faculty:
+        try:
+            fac_ids = [normalize_faculty(faculty)]
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    else:
+        fac_ids = [f["id"] for f in list_faculties()]
+
     courses = []
-    for i in range(1, 5):
-        info = _course_file_version(i)
-        if info is None:
-            courses.append(
-                {
+    for fid in fac_ids:
+        fac_courses = []
+        for i in courses_for(fid):
+            info = _course_file_version(fid, i)
+            if info is None:
+                item = {
+                    "faculty": fid,
                     "course": i,
                     "version": "",
                     "updatedAt": None,
                     "available": False,
                 }
-            )
-        else:
-            courses.append(info)
-    # Single fingerprint of all available courses
+            else:
+                item = info
+            fac_courses.append(item)
+            courses.append(item)
+        faculties.append(
+            {
+                "id": fid,
+                "short": faculty_meta(fid)["short"],
+                "courses": fac_courses,
+            }
+        )
     fingerprint = "|".join(
-        f"{c['course']}:{c['version']}" for c in courses if c.get("version")
+        f"{c['faculty']}:{c['course']}:{c['version']}"
+        for c in courses
+        if c.get("version")
     )
     return {
-        "courses": courses,
+        "faculties": faculties,
+        "courses": courses,  # flat list for older clients
         "fingerprint": fingerprint,
     }
 
@@ -430,25 +639,42 @@ def get_groups_debug(course: int = Query(..., ge=1, le=4)):
 
 
 @app.get("/api/groups")
-def get_groups(course: int = Query(..., ge=1, le=4), db: Session = Depends(get_db)):
+def get_groups(
+    course: int = Query(..., ge=1, le=5),
+    faculty: str = Query(DEFAULT_FACULTY),
+    db: Session = Depends(get_db),
+):
     """
     Always re-read groups from Excel with the current parser when the file exists.
     (Old SQLite GroupsCache often kept a stale list, e.g. И-125 with only 1 subgroup.)
     """
-    file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
+    try:
+        fid = normalize_faculty(faculty)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if course not in courses_for(fid):
+        raise HTTPException(status_code=400, detail=f"No course {course} for {fid}")
 
-    if file_path.exists():
+    file_path = resolve_schedule_path(UPLOAD_DIR, fid, course)
+
+    if file_path is not None:
         try:
-            groups = get_groups_from_file(str(file_path))
+            groups = _filter_groups_for_course(
+                fid, course, get_groups_from_file(str(file_path))
+            )
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Parse error: {exc}") from exc
 
         try:
-            existing = db.query(GroupsCache).filter(GroupsCache.course == course).first()
+            existing = (
+                db.query(GroupsCache)
+                .filter(GroupsCache.faculty == fid, GroupsCache.course == course)
+                .first()
+            )
             if existing:
                 existing.groups_json = groups
             else:
-                db.add(GroupsCache(course=course, groups_json=groups))
+                db.add(GroupsCache(faculty=fid, course=course, groups_json=groups))
             db.commit()
         except Exception as exc:
             print(f"[groups] cache write failed: {exc}")
@@ -461,36 +687,50 @@ def get_groups(course: int = Query(..., ge=1, le=4), db: Session = Depends(get_d
 
     # No Excel on disk — last resort: SQLite cache
     try:
-        cached = db.query(GroupsCache).filter(GroupsCache.course == course).first()
+        cached = (
+            db.query(GroupsCache)
+            .filter(GroupsCache.faculty == fid, GroupsCache.course == course)
+            .first()
+        )
         if cached and cached.groups_json:
             return cached.groups_json
     except Exception as exc:
-        print(f"[groups] cache read error course={course}: {exc}")
+        print(f"[groups] cache read error {fid}/{course}: {exc}")
         try:
             db.rollback()
         except Exception:
             pass
 
-    raise HTTPException(status_code=404, detail=f"Schedule for course {course} not found")
+    raise HTTPException(
+        status_code=404, detail=f"Schedule for {fid} course {course} not found"
+    )
 
 
 @app.get("/api/schedule")
 def get_schedule(
-    course: int = Query(..., ge=1, le=4),
+    course: int = Query(..., ge=1, le=5),
     group: str = Query(...),
     subgroup: Optional[str] = Query(None),
+    faculty: str = Query(DEFAULT_FACULTY),
     db: Session = Depends(get_db),
 ):
+    try:
+        fid = normalize_faculty(faculty)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if course not in courses_for(fid):
+        raise HTTPException(status_code=400, detail=f"No course {course} for {fid}")
+
     week = get_current_week_type()
     subgroup_key = subgroup or ""
-    file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
 
     record = None
     try:
-        ensure_course_indexed(db, course)
+        ensure_course_indexed(db, course, faculty=fid)
         record = (
             db.query(ScheduleRecord)
             .filter(
+                ScheduleRecord.faculty == fid,
                 ScheduleRecord.course == course,
                 ScheduleRecord.group_name == group,
                 ScheduleRecord.subgroup == subgroup_key,
@@ -504,6 +744,7 @@ def get_schedule(
             record = (
                 db.query(ScheduleRecord)
                 .filter(
+                    ScheduleRecord.faculty == fid,
                     ScheduleRecord.course == course,
                     ScheduleRecord.group_name == group,
                     ScheduleRecord.week_type == week,
@@ -519,6 +760,7 @@ def get_schedule(
 
     if record is not None:
         return {
+            "faculty": fid,
             "course": course,
             "group": group,
             "subgroup": subgroup,
@@ -528,18 +770,145 @@ def get_schedule(
         }
 
     # Last resort: live parse from Excel
-    file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"Schedule for course {course} not found")
+    file_path = resolve_schedule_path(UPLOAD_DIR, fid, course)
+    if file_path is None:
+        raise HTTPException(
+            status_code=404, detail=f"Schedule for {fid} course {course} not found"
+        )
 
     schedule = parse_schedule_for_group(str(file_path), group, subgroup, week_type=week)
     return {
+        "faculty": fid,
         "course": course,
         "group": group,
         "subgroup": subgroup,
         "weekType": week,
         "fromCache": False,
         "schedule": schedule_to_dict(schedule),
+    }
+
+
+@app.get("/api/schedule/by-teacher")
+def schedule_by_teacher(
+    q: str = Query(..., min_length=2, description="Фамилия или ФИО преподавателя"),
+    day: str = Query("today", description="today | week | Понедельник…"),
+    faculty: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Cross-group lookup: all lessons of a teacher for today or the whole week.
+    Matches Excel short form (Зяблицева О.В.) to directory FIO.
+    """
+    ensure_all_indexed(db, force=False)
+    week = get_current_week_type()
+    query = q.strip()
+
+    fac_filter = None
+    if faculty:
+        try:
+            fac_filter = normalize_faculty(faculty)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    day_key = (day or "today").strip()
+    if day_key.lower() in ("today", "сегодня"):
+        wanted_days = {get_today_name()}
+    elif day_key.lower() in ("week", "неделя", "all", "*"):
+        wanted_days = None  # all
+    else:
+        wanted_days = {day_key}
+
+    records_q = db.query(ScheduleRecord).filter(ScheduleRecord.week_type == week)
+    if fac_filter:
+        records_q = records_q.filter(ScheduleRecord.faculty == fac_filter)
+    records = records_q.all()
+
+    # Merge stream lectures that repeat across groups/subgroups into one card.
+    # Key = when/where/what (not group) — otherwise И/У/П/ЭТ give 4 identical rows.
+    merged: dict = {}
+    for rec in records:
+        days = schedule_days_from_json(rec.schedule_json)
+        for day_block in days:
+            day_name = day_block.get("dayName") or day_block.get("day_name") or ""
+            if wanted_days is not None and day_name not in wanted_days:
+                continue
+            for lesson in day_block.get("lessons") or []:
+                teacher = lesson.get("teacher") or ""
+                if not teacher or not teachers_match(query, teacher):
+                    continue
+                time_s = (lesson.get("time") or "").strip()
+                subject_s = (lesson.get("subject") or "").strip()
+                room_s = (lesson.get("room") or "").strip()
+                type_s = (lesson.get("type") or "").strip()
+                key = (
+                    day_name,
+                    time_s,
+                    subject_s.lower(),
+                    room_s.lower(),
+                    type_s.lower(),
+                )
+                group_label = rec.group_name
+                if rec.subgroup:
+                    group_label = f"{rec.group_name} ({rec.subgroup})"
+                if key not in merged:
+                    merged[key] = {
+                        "dayName": day_name,
+                        "time": time_s,
+                        "subject": subject_s,
+                        "teacher": teacher,
+                        "room": room_s,
+                        "type": type_s,
+                        "faculty": rec.faculty,
+                        "course": rec.course,
+                        "group": group_label,
+                        "subgroup": rec.subgroup or "",
+                        "_groups": [group_label],
+                        "_faculties": {rec.faculty},
+                        "_courses": {rec.course},
+                    }
+                else:
+                    item = merged[key]
+                    if group_label not in item["_groups"]:
+                        item["_groups"].append(group_label)
+                    item["_faculties"].add(rec.faculty)
+                    item["_courses"].add(rec.course)
+                    # Prefer non-empty room / richer teacher string
+                    if not item["room"] and room_s:
+                        item["room"] = room_s
+                    if len(teacher) > len(item.get("teacher") or ""):
+                        item["teacher"] = teacher
+
+    lessons_out = []
+    for item in merged.values():
+        groups_sorted = sorted(item.pop("_groups"))
+        faculties = sorted(item.pop("_faculties"))
+        courses = sorted(item.pop("_courses"))
+        item["group"] = ", ".join(groups_sorted)
+        item["subgroup"] = ""
+        item["faculty"] = faculties[0] if len(faculties) == 1 else ",".join(faculties)
+        item["course"] = courses[0] if len(courses) == 1 else courses[0]
+        item["groups"] = groups_sorted
+        lessons_out.append(item)
+
+    def sort_key(item: dict):
+        order = {
+            "Понедельник": 0,
+            "Вторник": 1,
+            "Среда": 2,
+            "Четверг": 3,
+            "Пятница": 4,
+            "Суббота": 5,
+            "Воскресенье": 6,
+        }
+        return (order.get(item["dayName"], 9), item.get("time") or "", item.get("subject") or "")
+
+    lessons_out.sort(key=sort_key)
+    return {
+        "query": query,
+        "weekType": week,
+        "day": day_key,
+        "count": len(lessons_out),
+        "lessons": lessons_out,
     }
 
 
@@ -573,16 +942,22 @@ async def validate_schedule(
 
 @app.post("/admin/upload")
 async def upload_schedule(
-    course: int = Form(..., ge=1, le=4),
+    course: int = Form(..., ge=1, le=5),
     file: UploadFile = File(...),
     password: str = Form(...),
     db: Session = Depends(get_db),
     skip_validate: str = Form("false"),
+    faculty: str = Form(DEFAULT_FACULTY),
 ):
     verify_admin_password(password)
 
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only Excel files are accepted")
+
+    try:
+        fid = normalize_faculty(faculty)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     do_skip = str(skip_validate).lower() in ("1", "true", "yes", "on")
 
@@ -605,35 +980,65 @@ async def upload_schedule(
                     },
                 )
 
-        file_path = UPLOAD_DIR / f"schedule{course}.xlsx"
+        dest_name = target_filename(fid, course, suffix=suffix.lower())
+        file_path = UPLOAD_DIR / dest_name
         shutil.copy2(tmp_path, file_path)
         # Force mtime = now so /api/schedule-updates version always changes
         # even if the same Excel bytes are re-uploaded (copy2 keeps source mtime).
         os.utime(file_path, None)
 
-        total_groups, total_lessons = index_course_file(db, course, file.filename)
+        # МТФ 4–5: one file feeds both courses
+        courses_to_index = [4, 5] if (fid == "mtf" and course in (4, 5)) else [course]
+        total_groups = 0
+        total_lessons = 0
+        index_errors: list[str] = []
+        for c in courses_to_index:
+            if c not in courses_for(fid):
+                continue
+            try:
+                g, les = index_course_file(db, c, file.filename, faculty=fid)
+                total_groups += g
+                total_lessons += les
+            except Exception as idx_exc:
+                index_errors.append(f"course {c}: {idx_exc}")
+                print(f"[upload] index {fid}/{c}: {idx_exc}")
+
+        # File is on disk even if indexing failed (e.g. magistracy grid)
+        status = "success" if not index_errors else ("partial" if total_groups else "saved")
         log = UploadLog(
             filename=file.filename,
+            faculty=fid,
             course=course,
             groups_count=total_groups,
             lessons_count=total_lessons,
-            status="success",
+            status=status,
+            error_message="; ".join(index_errors) if index_errors else None,
         )
         db.add(log)
         db.commit()
         return {
-            "status": "success",
+            "status": status,
             "filename": file.filename,
+            "savedAs": dest_name,
+            "faculty": fid,
             "course": course,
+            "indexedCourses": courses_to_index,
             "groups_count": total_groups,
             "lessons_count": total_lessons,
             "validation": validation,
+            "indexErrors": index_errors,
+            "message": (
+                None
+                if not index_errors
+                else "Файл сохранён на сервере, но индексация групп частично/не удалась (нужен другой парсер сетки)."
+            ),
         }
     except HTTPException:
         raise
     except Exception as e:
         log = UploadLog(
             filename=file.filename,
+            faculty=fid,
             course=course,
             status="error",
             error_message=str(e),
@@ -665,11 +1070,12 @@ def admin_status(
 ):
     verify_admin_password(x_admin_password or password or "")
 
-    logs = db.query(UploadLog).order_by(UploadLog.uploaded_at.desc()).limit(10).all()
+    logs = db.query(UploadLog).order_by(UploadLog.uploaded_at.desc()).limit(20).all()
     return {
         "uploads": [
             {
                 "filename": log.filename,
+                "faculty": getattr(log, "faculty", None) or "fae",
                 "course": log.course,
                 "groups_count": log.groups_count,
                 "lessons_count": log.lessons_count,
@@ -824,11 +1230,15 @@ async def admin_panel():
   th, td { border: 1px solid #e2e6ea; padding: 8px; text-align: left; }
   th { background: var(--blue); color: #fff; }
   .hint { font-size: 13px; color: #5f6b7a; margin-top: 8px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .tab { background: #e8eef8; color: var(--blue); border: 1.5px solid #c5d0e6; border-radius: 999px; padding: 8px 14px; font-weight: 700; cursor: pointer; font-size: 14px; }
+  .tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .slot-hint { font-size: 12px; color: #5f6b7a; margin: 0 0 8px; }
 </style>
 </head>
 <body>
   <h1>Расписание → приложение</h1>
-  <p class="sub">Для сотрудника, который готовит Excel. Пароль один раз, файлы по курсам — проверить, потом опубликовать. SSH и консоль не нужны.</p>
+  <p class="sub">Для сотрудника, который готовит Excel. Пароль один раз, файлы по факультетам и курсам — проверить, потом опубликовать. SSH и консоль не нужны.</p>
 
   <div class="card">
     <label>Пароль администратора</label>
@@ -837,8 +1247,9 @@ async def admin_panel():
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0;color:var(--blue);font-size:1.15rem;">Файлы по курсам</h2>
-    <p class="hint">1) Выберите Excel → 2) «Проверить» → 3) «Опубликовать» (или «Опубликовать все проверенные»).</p>
+    <h2 style="margin-top:0;color:var(--blue);font-size:1.15rem;">Файлы по факультетам</h2>
+    <div class="tabs" id="facultyTabs"></div>
+    <p class="hint" id="facultyHint">1) Выберите факультет → 2) Excel → 3) «Проверить» → 4) «Опубликовать».</p>
     <div class="row" id="courses"></div>
     <div class="btns" style="margin-top:16px;">
       <button type="button" id="btnValidateAll" class="secondary">Проверить все выбранные</button>
@@ -861,14 +1272,37 @@ async def admin_panel():
     <h2 style="margin-top:0;color:var(--blue);font-size:1.15rem;">История</h2>
     <button type="button" id="refreshBtn" class="secondary">Обновить историю</button>
     <table>
-      <thead><tr><th>Дата</th><th>Файл</th><th>Курс</th><th>Групп</th><th>Пар</th><th>Статус</th></tr></thead>
+      <thead><tr><th>Дата</th><th>Файл</th><th>Фак.</th><th>Курс</th><th>Групп</th><th>Пар</th><th>Статус</th></tr></thead>
       <tbody id="historyBody"></tbody>
     </table>
   </div>
 
 <script>
-const state = {}; // course -> { file, validation, reportEl }
+const FACULTIES = [
+  { id: 'fae', short: 'АиЭ', name: 'Автоматика и электроника',
+    slots: [
+      { course: 1, label: '1 курс' },
+      { course: 2, label: '2 курс' },
+      { course: 3, label: '3 курс' },
+      { course: 4, label: '4 курс' },
+    ]},
+  { id: 'mtf', short: 'МТФ', name: 'Машиностроительный технологический',
+    slots: [
+      { course: 1, label: '1 курс' },
+      { course: 2, label: '2 курс' },
+      { course: 3, label: '3 курс' },
+      { course: 4, label: '4–5 курс', hint: 'Один Excel на 4 и 5 курс' },
+    ]},
+  { id: 'masters', short: 'Маг.', name: 'Магистратура (очное)',
+    slots: [
+      { course: 2, label: '2 курс (очное)', hint: 'Файл магистров. Если проверка ругается на сетку — всё равно можно опубликовать.' },
+    ]},
+];
 
+let currentFaculty = 'fae';
+const state = {}; // key faculty:course -> { file, validation }
+
+function slotKey(c) { return currentFaculty + ':' + c; }
 function pw() { return document.getElementById('password').value || ''; }
 
 function ensurePw() {
@@ -876,23 +1310,50 @@ function ensurePw() {
   return true;
 }
 
+function currentSlots() {
+  return (FACULTIES.find(f => f.id === currentFaculty) || FACULTIES[0]).slots;
+}
+
+function renderFacultyTabs() {
+  const root = document.getElementById('facultyTabs');
+  root.innerHTML = '';
+  FACULTIES.forEach(f => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tab' + (f.id === currentFaculty ? ' active' : '');
+    b.textContent = f.short;
+    b.title = f.name;
+    b.onclick = () => {
+      currentFaculty = f.id;
+      renderFacultyTabs();
+      renderCourses();
+      document.getElementById('facultyHint').textContent =
+        f.name + ' — выберите Excel, проверьте и опубликуйте.';
+    };
+    root.appendChild(b);
+  });
+}
+
 function renderCourses() {
   const root = document.getElementById('courses');
   root.innerHTML = '';
-  for (let c = 1; c <= 4; c++) {
+  currentSlots().forEach(slot => {
+    const c = slot.course;
+    const key = slotKey(c);
+    if (!state[key]) state[key] = { validation: null };
     const box = document.createElement('div');
     box.className = 'course-box';
     box.innerHTML = `
-      <h3>${c} курс</h3>
-      <input type="file" id="file${c}" accept=".xlsx,.xls">
+      <h3>${slot.label}</h3>
+      ${slot.hint ? `<p class="slot-hint">${slot.hint}</p>` : ''}
+      <input type="file" id="file${key}" accept=".xlsx,.xls">
       <div class="btns">
         <button type="button" class="secondary" data-act="validate" data-c="${c}">Проверить</button>
         <button type="button" data-act="publish" data-c="${c}">Опубликовать</button>
       </div>
-      <div class="report" id="rep${c}" style="display:none;"></div>`;
+      <div class="report" id="rep${key}" style="display:none;"></div>`;
     root.appendChild(box);
-    state[c] = { validation: null };
-  }
+  });
   root.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => {
       const c = +btn.dataset.c;
@@ -903,7 +1364,8 @@ function renderCourses() {
 }
 
 function showReport(c, html, kind) {
-  const el = document.getElementById('rep' + c);
+  const el = document.getElementById('rep' + slotKey(c));
+  if (!el) return;
   el.style.display = 'block';
   el.className = 'report ' + (kind || '');
   el.innerHTML = html;
@@ -952,23 +1414,26 @@ async function readJson(res) {
 
 async function validateOne(c) {
   if (!ensurePw()) return;
-  const f = document.getElementById('file' + c).files[0];
-  if (!f) { alert('Выберите файл для ' + c + ' курса'); return; }
+  const key = slotKey(c);
+  const input = document.getElementById('file' + key);
+  const f = input && input.files[0];
+  if (!f) { alert('Выберите файл'); return; }
   showReport(c, 'Проверка…', '');
   const fd = new FormData();
   fd.append('password', pw());
   fd.append('file', f);
   fd.append('course', c);
+  fd.append('faculty', currentFaculty);
   try {
     const res = await fetch('/admin/validate', { method: 'POST', body: fd });
     const data = await readJson(res);
     if (!res.ok) {
       showReport(c, '<span class="err">' + (data.detail || res.status) + '</span>', 'err');
-      state[c].validation = null;
+      state[key].validation = null;
       return;
     }
-    state[c].validation = data;
-    state[c].file = f;
+    state[key].validation = data;
+    state[key].file = f;
     showReport(c, formatValidation(data), data.ok ? 'ok' : 'err');
   } catch (e) {
     showReport(c, '<span class="err">Ошибка: ' + e.message + '</span>', 'err');
@@ -977,27 +1442,33 @@ async function validateOne(c) {
 
 async function publishOne(c, force) {
   if (!ensurePw()) return;
-  const f = document.getElementById('file' + c).files[0];
-  if (!f) { alert('Выберите файл для ' + c + ' курса'); return; }
-  if (!state[c].validation && !force) {
+  const key = slotKey(c);
+  const input = document.getElementById('file' + key);
+  const f = input && input.files[0];
+  if (!f) { alert('Выберите файл'); return; }
+  if (!state[key].validation && !force) {
     const go = confirm('Файл ещё не проверен. Сначала проверить, потом опубликовать?\\nОК = только проверить, Отмена = отмена.');
     if (go) { await validateOne(c); return; }
     return;
   }
-  if (state[c].validation && (state[c].validation.warnings||[]).length && !force) {
-    if (!confirm('Есть предупреждения. Всё равно опубликовать ' + c + ' курс?')) return;
+  if (state[key].validation && (state[key].validation.warnings||[]).length && !force) {
+    if (!confirm('Есть предупреждения. Всё равно опубликовать?')) return;
   }
   showReport(c, 'Публикация…', '');
   const fd = new FormData();
   fd.append('password', pw());
   fd.append('file', f);
   fd.append('course', c);
-  if (force) fd.append('skip_validate', 'true');
+  fd.append('faculty', currentFaculty);
+  // Магистратура / нестандартная сетка — разрешаем публикацию без жёсткой проверки
+  if (force || currentFaculty === 'masters') fd.append('skip_validate', 'true');
   try {
     const res = await fetch('/admin/upload', { method: 'POST', body: fd });
     const data = await readJson(res);
     if (res.ok) {
-      let h = `<div class="ok"><b>Опубликовано</b> · групп: ${data.groups_count}, пар: ${data.lessons_count}</div>`;
+      let h = `<div class="ok"><b>Опубликовано</b> · ${currentFaculty} · групп: ${data.groups_count}, пар: ${data.lessons_count}</div>`;
+      if (data.savedAs) h += `<div class="hint">Файл на сервере: <code>${data.savedAs}</code></div>`;
+      if (data.indexedCourses) h += `<div class="hint">Проиндексированы курсы: ${(data.indexedCourses||[]).join(', ')}</div>`;
       if (data.validation) h += formatValidation(data.validation);
       showReport(c, h, 'ok');
       loadHistory();
@@ -1013,15 +1484,19 @@ async function publishOne(c, force) {
 }
 
 document.getElementById('btnValidateAll').onclick = async () => {
-  for (let c = 1; c <= 4; c++) {
-    if (document.getElementById('file' + c).files[0]) await validateOne(c);
+  for (const slot of currentSlots()) {
+    const key = slotKey(slot.course);
+    const input = document.getElementById('file' + key);
+    if (input && input.files[0]) await validateOne(slot.course);
   }
 };
 document.getElementById('btnPublishAll').onclick = async () => {
   if (!ensurePw()) return;
-  if (!confirm('Опубликовать все курсы, для которых выбран файл?')) return;
-  for (let c = 1; c <= 4; c++) {
-    if (document.getElementById('file' + c).files[0]) await publishOne(c, true);
+  if (!confirm('Опубликовать все выбранные файлы текущего факультета?')) return;
+  for (const slot of currentSlots()) {
+    const key = slotKey(slot.course);
+    const input = document.getElementById('file' + key);
+    if (input && input.files[0]) await publishOne(slot.course, true);
   }
 };
 
@@ -1038,7 +1513,7 @@ async function loadHistory() {
       ? new Date(u.uploaded_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })
       : '';
     tr.innerHTML = `<td>${when}</td>
-      <td>${u.filename || ''}</td><td>${u.course}</td><td>${u.groups_count}</td>
+      <td>${u.filename || ''}</td><td>${u.faculty || 'fae'}</td><td>${u.course}</td><td>${u.groups_count}</td>
       <td>${u.lessons_count}</td>
       <td class="${u.status === 'success' ? 'ok' : 'err'}">${u.status}</td>`;
     tbody.appendChild(tr);
@@ -1089,6 +1564,7 @@ document.getElementById('btnBackupZip').onclick = () => {
   window.location.href = '/admin/backup/zip?password=' + encodeURIComponent(pw());
 };
 
+renderFacultyTabs();
 renderCourses();
 </script>
 </body>

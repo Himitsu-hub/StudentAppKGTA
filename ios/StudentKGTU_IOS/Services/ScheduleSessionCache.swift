@@ -17,12 +17,12 @@ final class ScheduleSessionCache: ObservableObject {
     private var loadedKey: String?
     private var lastNetworkAt: Date?
 
-    private func key(course: Int, group: String?, subgroup: String?) -> String {
-        "\(course)|\(group ?? "")|\(subgroup ?? "")"
+    private func key(faculty: String, course: Int, group: String?, subgroup: String?) -> String {
+        "\(faculty)|\(course)|\(group ?? "")|\(subgroup ?? "")"
     }
 
     func hasData(for prefs: UserPreferences) -> Bool {
-        let k = key(course: prefs.course, group: prefs.group, subgroup: prefs.subgroup)
+        let k = key(faculty: prefs.faculty, course: prefs.course, group: prefs.group, subgroup: prefs.subgroup)
         return loadedKey == k && !schedule.isEmpty
     }
 
@@ -34,7 +34,7 @@ final class ScheduleSessionCache: ObservableObject {
             return
         }
 
-        let k = key(course: prefs.course, group: group, subgroup: prefs.subgroup)
+        let k = key(faculty: prefs.faculty, course: prefs.course, group: group, subgroup: prefs.subgroup)
         let hasExisting = loadedKey == k && !schedule.isEmpty
         let recent = lastNetworkAt.map { Date().timeIntervalSince($0) < 90 } ?? false
 
@@ -44,6 +44,7 @@ final class ScheduleSessionCache: ObservableObject {
 
         // Always try disk first (even if session already had data)
         if let disk = ScheduleRepository.shared.getScheduleFromCacheOnly(
+            faculty: prefs.faculty,
             course: prefs.course,
             group: group,
             subgroup: prefs.subgroup
@@ -70,8 +71,9 @@ final class ScheduleSessionCache: ObservableObject {
         error = nil
         defer { isLoading = false }
 
-        groups = await ScheduleRepository.shared.getGroups(course: prefs.course)
+        groups = await ScheduleRepository.shared.getGroups(faculty: prefs.faculty, course: prefs.course)
         let result = await ScheduleRepository.shared.getSchedule(
+            faculty: prefs.faculty,
             course: prefs.course,
             group: group,
             subgroup: prefs.subgroup
@@ -95,5 +97,9 @@ final class ScheduleSessionCache: ObservableObject {
     func invalidate() {
         loadedKey = nil
         lastNetworkAt = nil
+    }
+
+    func setGroups(_ value: [String: [String]]) {
+        groups = value
     }
 }
