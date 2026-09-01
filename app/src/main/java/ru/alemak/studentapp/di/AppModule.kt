@@ -72,12 +72,13 @@ object AppModule {
     @Provides
     @Singleton
     fun provideOkHttp(): OkHttpClient {
-        // Short timeouts — PTR must fail fast to cache when API/VPS is wedged.
+        // VPN-friendly: slightly longer connect (handshake), still fail over to cache
+        // without multi-retry sleeps that feel like the app is frozen.
         val builder = OkHttpClient.Builder()
-            .connectTimeout(6, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
-            .callTimeout(12, TimeUnit.SECONDS)
+            .connectTimeout(12, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .addInterceptor(RetryInterceptor(maxAttempts = 1))
         if (BuildConfig.DEBUG) {

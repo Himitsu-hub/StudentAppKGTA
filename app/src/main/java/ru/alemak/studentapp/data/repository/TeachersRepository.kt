@@ -18,6 +18,11 @@ class TeachersRepository @Inject constructor(
     private val api: ScheduleApi,
     private val teacherDao: TeacherDao,
 ) {
+    suspend fun getTeachersFromCacheOnly(): TeachersLoadResult {
+        val cached = teacherDao.getAll().map { it.toDomain() }
+        return TeachersLoadResult(cached, fromCache = cached.isNotEmpty())
+    }
+
     suspend fun getTeachers(forceRefresh: Boolean = false): TeachersLoadResult {
         val remote = runCatching {
             api.getTeachers().teachers.map { it.toDomain() }

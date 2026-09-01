@@ -25,12 +25,12 @@ actor APIClient {
     private let decoder = JSONDecoder()
 
     init() {
-        // NEVER waitsForConnectivity — that hangs for minutes in airplane mode.
+        // NEVER waitsForConnectivity — that hangs for minutes in airplane mode / bad VPN.
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = false
-        // Fail fast on wedged API so pull-to-refresh never spins for a minute
-        config.timeoutIntervalForRequest = 8
-        config.timeoutIntervalForResource = 12
+        // VPN-friendly timeouts: enough for slow handshake, still fail over to disk cache.
+        config.timeoutIntervalForRequest = 12
+        config.timeoutIntervalForResource = 20
         config.httpMaximumConnectionsPerHost = 4
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.allowsExpensiveNetworkAccess = true
@@ -101,7 +101,7 @@ actor APIClient {
     private func get<T: Decodable>(
         _ path: String,
         query: [(String, String)] = [],
-        retries: Int = 2
+        retries: Int = 1
     ) async throws -> T {
         // Hard offline gate — do not touch the network at all
         if !NetworkMonitor.shared.isOnline {
@@ -109,6 +109,7 @@ actor APIClient {
         }
 
         var lastError: Error?
+        // Default 1 attempt: on VPN, retries turn one slow failure into a long freeze.
         let attempts = max(1, retries)
         for attempt in 0..<attempts {
             // Re-check each attempt (user may toggle airplane mid-flight)
@@ -127,7 +128,7 @@ actor APIClient {
                 lastError = error
             }
             if attempt + 1 < attempts {
-                try? await Task.sleep(nanoseconds: 400_000_000)
+                try? await Task.sleep(nanoseconds: 250_000_000)
             }
         }
         if let e = lastError as? APIError { throw e }
@@ -146,7 +147,7 @@ actor APIClient {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("StudentKGTU-iOS", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 8
+        request.timeoutInterval = 12
 
         do {
             let (data, response) = try await session.data(for: request)

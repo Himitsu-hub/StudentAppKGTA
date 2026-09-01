@@ -210,6 +210,32 @@ class HomeViewModel @Inject constructor(
                 }
                 return LoadMeta(fromCache = false, updatedAt = 0L)
             }
+
+            // VPN-friendly: paint disk cache immediately, then refresh from network.
+            val cached = scheduleRepository.getScheduleFromCacheOnly(
+                faculty = selection.faculty,
+                course = selection.course,
+                group = selection.group,
+                subgroup = selection.subgroup,
+            )
+            if (cached != null && cached.schedule.isNotEmpty()) {
+                val lesson = scheduleRepository.findNextLesson(cached.schedule)
+                _uiState.update {
+                    it.copy(
+                        nextLesson = lesson,
+                        weekType = cached.weekType.ifBlank { it.weekType },
+                        isVacation = false,
+                        vacationTitle = null,
+                        vacationSubtitle = null,
+                        hasGroup = true,
+                        isLoadingLesson = false,
+                        usingCachedData = true,
+                        updatedLabel = TimeFormat.updatedAtLabel(cached.updatedAtMillis)
+                            ?: it.updatedLabel,
+                    )
+                }
+            }
+
             val result = scheduleRepository.getSchedule(
                 faculty = selection.faculty,
                 course = selection.course,
@@ -220,6 +246,7 @@ class HomeViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     nextLesson = lesson,
+                    weekType = result.weekType.ifBlank { it.weekType },
                     isVacation = false,
                     vacationTitle = null,
                     vacationSubtitle = null,
@@ -242,10 +269,22 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadNews(): LoadMeta {
         return try {
-            val result = newsRepository.getNews(limit = 15, force = true)
+            val cached = newsRepository.getNewsFromCacheOnly(limit = 15)
+            if (cached.news.isNotEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        news = cached.news,
+                        isLoadingNews = false,
+                        usingCachedData = true,
+                        updatedLabel = TimeFormat.updatedAtLabel(cached.updatedAtMillis)
+                            ?: it.updatedLabel,
+                    )
+                }
+            }
+            val result = newsRepository.getNews(limit = 15, force = false)
             _uiState.update {
                 it.copy(
-                    news = result.news,
+                    news = result.news.ifEmpty { it.news },
                     isLoadingNews = false,
                 )
             }

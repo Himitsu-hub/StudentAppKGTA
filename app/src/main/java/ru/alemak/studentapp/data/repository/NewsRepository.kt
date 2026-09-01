@@ -19,8 +19,19 @@ class NewsRepository @Inject constructor(
     private val api: ScheduleApi,
     private val newsDao: NewsDao,
 ) {
+    suspend fun getNewsFromCacheOnly(limit: Int = 15): NewsLoadResult {
+        val cachedEntities = newsDao.getAll().take(limit)
+        val cached = cachedEntities.map { it.toDomain() }
+        val updatedAt = cachedEntities.maxOfOrNull { it.updatedAt } ?: 0L
+        return NewsLoadResult(
+            news = cached,
+            fromCache = cached.isNotEmpty(),
+            updatedAtMillis = updatedAt,
+        )
+    }
+
     suspend fun getNews(limit: Int = 15, force: Boolean = false): NewsLoadResult {
-        // Always try the server first — replace local cache when remote is non-empty
+        // Try network; on VPN failure fall back to Room instantly usable cache.
         val remote = runCatching {
             api.getNews(limit = limit, force = force).news.map { it.toDomain() }
         }.getOrNull()

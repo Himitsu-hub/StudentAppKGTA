@@ -177,6 +177,20 @@ class ScheduleViewModel @Inject constructor(
     ) {
         _uiState.update { it.copy(isLoading = it.schedule.isEmpty(), error = null) }
         try {
+            val cached = scheduleRepository.getScheduleFromCacheOnly(faculty, course, group, subgroup)
+            if (cached != null && cached.schedule.isNotEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        schedule = cached.schedule,
+                        weekType = cached.weekType.ifBlank { DateUtils.getCurrentWeekType() },
+                        isLoading = false,
+                        usingCachedData = true,
+                        updatedLabel = TimeFormat.updatedAtLabel(cached.updatedAtMillis),
+                        error = null,
+                    )
+                }
+            }
+
             val result = scheduleRepository.getSchedule(faculty, course, group, subgroup)
             _uiState.update {
                 it.copy(

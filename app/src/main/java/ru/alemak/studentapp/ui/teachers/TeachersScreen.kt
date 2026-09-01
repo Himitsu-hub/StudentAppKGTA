@@ -450,6 +450,9 @@ private fun TeacherTodayLessonCard(
     muted: Color,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val onlineColor = Color(0xFFE8624D)
+    val isOnline = lesson.room.contains("онлайн", ignoreCase = true)
+        || lesson.subject.contains("онлайн", ignoreCase = true)
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = lessonBg),
@@ -458,27 +461,44 @@ private fun TeacherTodayLessonCard(
         Column(Modifier.padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(lesson.time, fontWeight = FontWeight.Bold, color = scheme.onSurface)
-                if (lesson.type.isNotBlank()) {
-                    Text(lesson.type, style = MaterialTheme.typography.bodySmall, color = muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isOnline) {
+                        Text(
+                            "ОНЛАЙН",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .background(onlineColor, RoundedCornerShape(50))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                    if (lesson.type.isNotBlank()) {
+                        Text(lesson.type, style = MaterialTheme.typography.bodySmall, color = muted)
+                    }
                 }
             }
             Spacer(Modifier.height(4.dp))
             Text(lesson.subject, fontWeight = FontWeight.SemiBold, color = scheme.onSurface)
             Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (lesson.room.isNotBlank()) {
-                    Text("каб. ${lesson.room}", style = MaterialTheme.typography.bodySmall, color = muted)
+            if (lesson.room.isNotBlank()) {
+                val roomLabel = when {
+                    isOnline && lesson.room.equals("онлайн", ignoreCase = true) -> "Формат: онлайн"
+                    isOnline -> "Аудитория / формат: ${lesson.room}"
+                    else -> "каб. ${lesson.room}"
                 }
-                if (lesson.group.isNotBlank()) {
-                    Text(lesson.group, style = MaterialTheme.typography.bodySmall, color = muted)
-                }
-                if (lesson.faculty.isNotBlank()) {
-                    Text(
-                        FacultyCatalog.shortName(lesson.faculty),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = muted,
-                    )
-                }
+                Text(
+                    roomLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isOnline) onlineColor else muted,
+                )
+            }
+            if (lesson.group.isNotBlank()) {
+                Text(
+                    "Группы: ${lesson.group}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = muted,
+                )
             }
         }
     }

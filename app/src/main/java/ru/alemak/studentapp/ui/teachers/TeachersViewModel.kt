@@ -52,6 +52,22 @@ class TeachersViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, usingCachedData = false) }
             try {
+                // Show Room cache first so VPN does not blank the list for 10+ seconds.
+                val cached = teachersRepository.getTeachersFromCacheOnly()
+                if (cached.teachers.isNotEmpty()) {
+                    val sortedCached = TeacherUtils.sort(cached.teachers)
+                    val deptsCached = listOf("Все") + TeacherUtils.departments(sortedCached)
+                    _uiState.update {
+                        it.copy(
+                            teachers = sortedCached,
+                            departments = deptsCached,
+                            isLoading = false,
+                            usingCachedData = true,
+                            error = null,
+                        ).let { state -> applyFilter(state) }
+                    }
+                }
+
                 val result = teachersRepository.getTeachers(forceRefresh = true)
                 val sorted = TeacherUtils.sort(result.teachers)
                 val depts = listOf("Все") + TeacherUtils.departments(sorted)

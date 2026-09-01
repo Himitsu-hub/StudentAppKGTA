@@ -21,12 +21,40 @@ class ScheduleRepository @Inject constructor(
     private val api: ScheduleApi,
     private val scheduleDao: ScheduleDao,
 ) {
+    /** Instant Room read for home/schedule first paint (VPN-friendly). */
+    suspend fun getScheduleFromCacheOnly(
+        faculty: String = FacultyCatalog.FAE,
+        course: Int,
+        group: String,
+        subgroup: String?,
+    ): ScheduleResult? {
+        val fid = FacultyCatalog.normalize(faculty)
+        val weekType = DateUtils.getCurrentWeekType()
+        val key = cacheKey(fid, course, group, subgroup, weekType)
+        val cached = scheduleDao.getSchedule(key)
+            ?: scheduleDao.getSchedule(legacyCacheKey(course, group, subgroup, weekType))
+        return cached?.let {
+            ScheduleResult(
+                course = it.course,
+                group = it.groupName,
+                subgroup = it.subgroup.ifBlank { null },
+                weekType = it.weekType,
+                schedule = it.schedule,
+                fromCache = true,
+                isOffline = true,
+                updatedAtMillis = it.updatedAt,
+            )
+        }
+    }
+
     suspend fun getGroups(
         faculty: String = FacultyCatalog.FAE,
         course: Int,
     ): Map<String, List<String>> {
         val fid = FacultyCatalog.normalize(faculty)
         val key = groupsCacheKey(fid, course)
+        // Prefer disk when present so VPN latency does not block the picker.
+        val cached = scheduleDao.getGroups(key)?.groups.orEmpty()
         val remote = runCatching { api.getGroups(fid, course) }.getOrNull()
         if (remote != null) {
             scheduleDao.upsertGroups(
@@ -39,7 +67,7 @@ class ScheduleRepository @Inject constructor(
             )
             return remote
         }
-        return scheduleDao.getGroups(key)?.groups.orEmpty()
+        return cached
     }
 
     suspend fun getSchedule(
@@ -52,7 +80,22 @@ class ScheduleRepository @Inject constructor(
         val weekType = DateUtils.getCurrentWeekType()
         val key = cacheKey(fid, course, group, subgroup, weekType)
 
-        // Always try server first
+        // Read cache first (does not wait for network).
+        val cachedEntity = scheduleDao.getSchedule(key)
+            ?: scheduleDao.getSchedule(legacyCacheKey(course, group, subgroup, weekType))
+        val cached = cachedEntity?.let {
+            ScheduleResult(
+                course = it.course,
+                group = it.groupName,
+                subgroup = it.subgroup.ifBlank { null },
+                weekType = it.weekType,
+                schedule = it.schedule,
+                fromCache = true,
+                isOffline = true,
+                updatedAtMillis = it.updatedAt,
+            )
+        }
+
         val remote = runCatching {
             api.getSchedule(fid, course, group, subgroup).toDomain(isOffline = false)
         }.getOrNull()
@@ -73,22 +116,7 @@ class ScheduleRepository @Inject constructor(
             return remote.copy(isOffline = false, fromCache = false, updatedAtMillis = now)
         }
 
-        val cached = scheduleDao.getSchedule(key)
-            ?: scheduleDao.getSchedule(legacyCacheKey(course, group, subgroup, weekType))
-        if (cached != null) {
-            return ScheduleResult(
-                course = cached.course,
-                group = cached.groupName,
-                subgroup = cached.subgroup.ifBlank { null },
-                weekType = cached.weekType,
-                schedule = cached.schedule,
-                fromCache = true,
-                isOffline = true,
-                updatedAtMillis = cached.updatedAt,
-            )
-        }
-
-        return ScheduleResult(
+        return cached ?: ScheduleResult(
             course = course,
             group = group,
             subgroup = subgroup,
