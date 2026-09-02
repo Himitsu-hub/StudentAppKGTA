@@ -1,13 +1,38 @@
 import Foundation
 
 enum TeacherUtils {
+    /// Hierarchy for the teachers list:
+    /// rector → vice-rectors → deans → heads of chairs → professors →
+    /// docents → senior lecturers → lecturers → assistants → other staff.
     static func leadershipPriority(_ teacher: Teacher) -> Int {
         let pos = teacher.position.lowercased()
+            .replacingOccurrences(of: "ё", with: "е")
+
         if pos.contains("ректор") && !pos.contains("проректор") { return 0 }
         if pos.contains("проректор") { return 1 }
-        if pos.contains("декан") { return 2 }
-        if pos.contains("заведующий кафедр") || pos.contains("зав. кафедр") { return 3 }
-        return 4
+        if pos.contains("декан") { return 2 } // including зам. декана
+        if pos.contains("заведующий кафедр")
+            || pos.contains("зав. кафедр")
+            || pos.contains("зав кафедр")
+            || pos.contains("и.о. заведующ") {
+            return 3
+        }
+        if pos.contains("профессор") { return 4 }
+        if pos.contains("доцент") { return 5 }
+        if pos.contains("старший преподаватель") || pos.contains("ст. преп") || pos.contains("ст.преп") {
+            return 6
+        }
+        if pos.contains("преподаватель") { return 7 }
+        if pos.contains("ассистент") || pos.contains("асс.") { return 8 }
+        // Engineers, methodologists, lab staff, etc.
+        if pos.contains("инженер")
+            || pos.contains("методист")
+            || pos.contains("лаборант")
+            || pos.contains("специалист")
+            || pos.contains("секретар") {
+            return 9
+        }
+        return 10
     }
 
     static func extractDepartment(_ teacher: Teacher) -> String {

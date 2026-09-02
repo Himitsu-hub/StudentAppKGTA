@@ -3,14 +3,27 @@ package ru.alemak.studentapp.util
 import ru.alemak.studentapp.data.model.Teacher
 
 object TeacherUtils {
+    /**
+     * Hierarchy for the teachers list:
+     * rector → vice-rectors → deans → heads of chairs → professors →
+     * docents → senior lecturers → lecturers → assistants → other staff.
+     */
     fun leadershipPriority(teacher: Teacher): Int {
-        val pos = teacher.position.lowercase()
+        val pos = teacher.position.lowercase().replace('ё', 'е')
         return when {
             "ректор" in pos && "проректор" !in pos -> 0
             "проректор" in pos -> 1
             "декан" in pos -> 2
-            "заведующий кафедр" in pos || "зав. кафедр" in pos -> 3
-            else -> 4
+            "заведующий кафедр" in pos || "зав. кафедр" in pos || "зав кафедр" in pos ||
+                "и.о. заведующ" in pos -> 3
+            "профессор" in pos -> 4
+            "доцент" in pos -> 5
+            "старший преподаватель" in pos || "ст. преп" in pos || "ст.преп" in pos -> 6
+            "преподаватель" in pos -> 7
+            "ассистент" in pos || "асс." in pos -> 8
+            "инженер" in pos || "методист" in pos || "лаборант" in pos ||
+                "специалист" in pos || "секретар" in pos -> 9
+            else -> 10
         }
     }
 

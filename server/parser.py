@@ -144,7 +144,14 @@ def infer_course_from_group(group_name: str, now: Optional[datetime] = None) -> 
 
 
 def get_current_week_type(now: Optional[datetime] = None) -> str:
-    now = (now or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+    if now is None:
+        try:
+            from zoneinfo import ZoneInfo
+
+            now = datetime.now(ZoneInfo("Europe/Moscow"))
+        except Exception:
+            now = datetime.now()
+    now = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
     first, second = get_semester_starts(now)
     semester_start = second if now >= second else first
     diff_days = max(0, (now - semester_start).days)
@@ -154,7 +161,14 @@ def get_current_week_type(now: Optional[datetime] = None) -> str:
 
 def get_today_name() -> str:
     days = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
-    return days[datetime.now().weekday()]
+    # University lives in Moscow — avoid UTC day shift on the VPS.
+    try:
+        from zoneinfo import ZoneInfo
+
+        now = datetime.now(ZoneInfo("Europe/Moscow"))
+    except Exception:
+        now = datetime.now()
+    return days[now.weekday()]
 
 
 def get_date_for_day(day_name: str) -> datetime:

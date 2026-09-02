@@ -43,6 +43,11 @@ from parser import (
     schedule_to_dict,
 )
 from schedule_validator import validate_schedule_file
+from teacher_index import (
+    invalidate_index,
+    lookup_lessons,
+    rebuild_teacher_index,
+)
 from teacher_match import teachers_match
 
 load_dotenv()
@@ -203,6 +208,13 @@ def ensure_all_indexed(db: Session, force: bool = False) -> None:
                 ensure_course_indexed(db, course, force=force, faculty=fac["id"])
             except Exception as exc:
                 print(f"Index {fac['id']} course {course}: {exc}")
+    try:
+        if force:
+            invalidate_index()
+        stats = rebuild_teacher_index(db, get_current_week_type())
+        print(f"[teacher-index] {stats}")
+    except Exception as exc:
+        print(f"[teacher-index] rebuild failed: {exc}")
 
 
 def _news_refresh_loop(interval_sec: int = 90) -> None:
@@ -796,117 +808,42 @@ def schedule_by_teacher(
     db: Session = Depends(get_db),
 ):
     """
-    Cross-group lookup: all lessons of a teacher for today or the whole week.
-    Matches Excel short form (Зяблицева О.В.) to directory FIO.
+    Fast cross-group lookup via inverted teacher index (rebuilt on schedule index).
     """
     ensure_all_indexed(db, force=False)
     week = get_current_week_type()
     query = q.strip()
 
-    fac_filter = None
-    if faculty:
+    # Ensure index exists for current week (cheap no-op if already built)
+    from teacher_index import load_index
+
+    if not (load_index(week).get("surnames")):
         try:
-            fac_filter = normalize_faculty(faculty)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            rebuild_teacher_index(db, week)
+        except Exception as exc:
+            print(f"[teacher-index] lazy rebuild: {exc}")
 
     day_key = (day or "today").strip()
     if day_key.lower() in ("today", "сегодня"):
         wanted_days = {get_today_name()}
     elif day_key.lower() in ("week", "неделя", "all", "*"):
-        wanted_days = None  # all
+        wanted_days = None
     else:
         wanted_days = {day_key}
 
-    records_q = db.query(ScheduleRecord).filter(ScheduleRecord.week_type == week)
-    if fac_filter:
-        records_q = records_q.filter(ScheduleRecord.faculty == fac_filter)
-    records = records_q.all()
+    lessons_out = lookup_lessons(query, week, wanted_days)
+    if faculty:
+        try:
+            fid = normalize_faculty(faculty)
+            lessons_out = [x for x in lessons_out if x.get("faculty") == fid]
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    # Merge stream lectures that repeat across groups/subgroups into one card.
-    # Key = when/where/what (not group) — otherwise И/У/П/ЭТ give 4 identical rows.
-    merged: dict = {}
-    for rec in records:
-        days = schedule_days_from_json(rec.schedule_json)
-        for day_block in days:
-            day_name = day_block.get("dayName") or day_block.get("day_name") or ""
-            if wanted_days is not None and day_name not in wanted_days:
-                continue
-            for lesson in day_block.get("lessons") or []:
-                teacher = lesson.get("teacher") or ""
-                if not teacher or not teachers_match(query, teacher):
-                    continue
-                time_s = (lesson.get("time") or "").strip()
-                subject_s = (lesson.get("subject") or "").strip()
-                room_s = (lesson.get("room") or "").strip()
-                type_s = (lesson.get("type") or "").strip()
-                key = (
-                    day_name,
-                    time_s,
-                    subject_s.lower(),
-                    room_s.lower(),
-                    type_s.lower(),
-                )
-                group_label = rec.group_name
-                if rec.subgroup:
-                    group_label = f"{rec.group_name} ({rec.subgroup})"
-                if key not in merged:
-                    merged[key] = {
-                        "dayName": day_name,
-                        "time": time_s,
-                        "subject": subject_s,
-                        "teacher": teacher,
-                        "room": room_s,
-                        "type": type_s,
-                        "faculty": rec.faculty,
-                        "course": rec.course,
-                        "group": group_label,
-                        "subgroup": rec.subgroup or "",
-                        "_groups": [group_label],
-                        "_faculties": {rec.faculty},
-                        "_courses": {rec.course},
-                    }
-                else:
-                    item = merged[key]
-                    if group_label not in item["_groups"]:
-                        item["_groups"].append(group_label)
-                    item["_faculties"].add(rec.faculty)
-                    item["_courses"].add(rec.course)
-                    # Prefer non-empty room / richer teacher string
-                    if not item["room"] and room_s:
-                        item["room"] = room_s
-                    if len(teacher) > len(item.get("teacher") or ""):
-                        item["teacher"] = teacher
-
-    lessons_out = []
-    for item in merged.values():
-        groups_sorted = sorted(item.pop("_groups"))
-        faculties = sorted(item.pop("_faculties"))
-        courses = sorted(item.pop("_courses"))
-        item["group"] = ", ".join(groups_sorted)
-        item["subgroup"] = ""
-        item["faculty"] = faculties[0] if len(faculties) == 1 else ",".join(faculties)
-        item["course"] = courses[0] if len(courses) == 1 else courses[0]
-        item["groups"] = groups_sorted
-        lessons_out.append(item)
-
-    def sort_key(item: dict):
-        order = {
-            "Понедельник": 0,
-            "Вторник": 1,
-            "Среда": 2,
-            "Четверг": 3,
-            "Пятница": 4,
-            "Суббота": 5,
-            "Воскресенье": 6,
-        }
-        return (order.get(item["dayName"], 9), item.get("time") or "", item.get("subject") or "")
-
-    lessons_out.sort(key=sort_key)
     return {
         "query": query,
         "weekType": week,
         "day": day_key,
+        "todayName": get_today_name(),
         "count": len(lessons_out),
         "lessons": lessons_out,
     }
@@ -1016,6 +953,11 @@ async def upload_schedule(
         )
         db.add(log)
         db.commit()
+        try:
+            invalidate_index()
+            rebuild_teacher_index(db, get_current_week_type())
+        except Exception as exc:
+            print(f"[teacher-index] after upload: {exc}")
         return {
             "status": status,
             "filename": file.filename,
