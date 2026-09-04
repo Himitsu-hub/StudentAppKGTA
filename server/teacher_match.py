@@ -31,6 +31,11 @@ def strip_titles(raw: str) -> str:
     return s
 
 
+def _fold_yo(s: str) -> str:
+    """Normalize ё/Ё → е/Е so Шварёва and Шварева hit the same bucket."""
+    return (s or "").replace("ё", "е").replace("Ё", "Е")
+
+
 def parse_teacher_key(raw: str) -> Optional[Tuple[str, str, str]]:
     """
     Return (surname_lower, initial1_lower, initial2_lower).
@@ -43,15 +48,19 @@ def parse_teacher_key(raw: str) -> Optional[Tuple[str, str, str]]:
     s = s.split(",")[0].strip()
     m = _FULL_RE.match(s)
     if m:
-        return m.group(1).lower(), m.group(2)[0].lower(), m.group(3)[0].lower()
+        return (
+            _fold_yo(m.group(1).lower()),
+            m.group(2)[0].lower(),
+            m.group(3)[0].lower(),
+        )
     m = _INITIALS_RE.match(s)
     if m:
         i2 = (m.group(3) or "").lower()
-        return m.group(1).lower(), m.group(2).lower(), i2
+        return _fold_yo(m.group(1).lower()), m.group(2).lower(), i2
     # Surname only
     parts = s.split()
     if parts:
-        return parts[0].lower(), "", ""
+        return _fold_yo(parts[0].lower()), "", ""
     return None
 
 
@@ -61,8 +70,8 @@ def teachers_match(query: str, candidate: str) -> bool:
     c = parse_teacher_key(candidate)
     if not q or not c:
         # fallback: loose substring on stripped text
-        qs = strip_titles(query).lower()
-        cs = strip_titles(candidate).lower()
+        qs = _fold_yo(strip_titles(query).lower())
+        cs = _fold_yo(strip_titles(candidate).lower())
         return bool(qs) and qs in cs
     if q[0] != c[0]:
         return False

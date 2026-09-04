@@ -94,7 +94,8 @@ class TeachersViewModel @Inject constructor(
     fun loadTodayLessons(teacherName: String) {
         if (teacherName.isBlank()) return
         val current = _todayState.value
-        if (current.loadedFor == teacherName && (current.isLoading || current.lessons.isNotEmpty())) {
+        // Cache empty results too — "нет пар сегодня" is a valid answer, don't re-hit VPN.
+        if (current.loadedFor == teacherName && !current.isLoading) {
             return
         }
         viewModelScope.launch {
@@ -102,6 +103,8 @@ class TeachersViewModel @Inject constructor(
                 it.copy(isLoading = true, lessons = emptyList(), loadedFor = teacherName)
             }
             val result = scheduleRepository.scheduleByTeacher(query = teacherName, day = "today")
+            // Ignore stale response if user already opened another teacher.
+            if (_todayState.value.loadedFor != teacherName) return@launch
             _todayState.update {
                 it.copy(
                     isLoading = false,

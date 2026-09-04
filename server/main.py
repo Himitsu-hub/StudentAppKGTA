@@ -45,6 +45,7 @@ from parser import (
 from schedule_validator import validate_schedule_file
 from teacher_index import (
     invalidate_index,
+    load_index,
     lookup_lessons,
     rebuild_teacher_index,
 )
@@ -209,10 +210,14 @@ def ensure_all_indexed(db: Session, force: bool = False) -> None:
             except Exception as exc:
                 print(f"Index {fac['id']} course {course}: {exc}")
     try:
+        week = get_current_week_type()
         if force:
             invalidate_index()
-        stats = rebuild_teacher_index(db, get_current_week_type())
-        print(f"[teacher-index] {stats}")
+        existing = load_index(week) if not force else {"surnames": {}}
+        # Rebuild only when missing / wrong week / forced — NOT on every API hit.
+        if force or not (existing.get("surnames")):
+            stats = rebuild_teacher_index(db, week)
+            print(f"[teacher-index] {stats}")
     except Exception as exc:
         print(f"[teacher-index] rebuild failed: {exc}")
 
@@ -657,8 +662,9 @@ def get_groups(
     db: Session = Depends(get_db),
 ):
     """
-    Always re-read groups from Excel with the current parser when the file exists.
-    (Old SQLite GroupsCache often kept a stale list, e.g. И-125 with only 1 subgroup.)
+    Fast path: return GroupsCache from SQLite (filled on Excel upload / index).
+    Re-parse Excel only on cache miss — parsing on every request was ~5–8s and
+    made faculty/course switching unusable on VPN.
     """
     try:
         fid = normalize_faculty(faculty)
@@ -667,37 +673,6 @@ def get_groups(
     if course not in courses_for(fid):
         raise HTTPException(status_code=400, detail=f"No course {course} for {fid}")
 
-    file_path = resolve_schedule_path(UPLOAD_DIR, fid, course)
-
-    if file_path is not None:
-        try:
-            groups = _filter_groups_for_course(
-                fid, course, get_groups_from_file(str(file_path))
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Parse error: {exc}") from exc
-
-        try:
-            existing = (
-                db.query(GroupsCache)
-                .filter(GroupsCache.faculty == fid, GroupsCache.course == course)
-                .first()
-            )
-            if existing:
-                existing.groups_json = groups
-            else:
-                db.add(GroupsCache(faculty=fid, course=course, groups_json=groups))
-            db.commit()
-        except Exception as exc:
-            print(f"[groups] cache write failed: {exc}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-
-        return groups
-
-    # No Excel on disk — last resort: SQLite cache
     try:
         cached = (
             db.query(GroupsCache)
@@ -713,9 +688,38 @@ def get_groups(
         except Exception:
             pass
 
-    raise HTTPException(
-        status_code=404, detail=f"Schedule for {fid} course {course} not found"
-    )
+    file_path = resolve_schedule_path(UPLOAD_DIR, fid, course)
+    if file_path is None:
+        raise HTTPException(
+            status_code=404, detail=f"Schedule for {fid} course {course} not found"
+        )
+
+    try:
+        groups = _filter_groups_for_course(
+            fid, course, get_groups_from_file(str(file_path))
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Parse error: {exc}") from exc
+
+    try:
+        existing = (
+            db.query(GroupsCache)
+            .filter(GroupsCache.faculty == fid, GroupsCache.course == course)
+            .first()
+        )
+        if existing:
+            existing.groups_json = groups
+        else:
+            db.add(GroupsCache(faculty=fid, course=course, groups_json=groups))
+        db.commit()
+    except Exception as exc:
+        print(f"[groups] cache write failed: {exc}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    return groups
 
 
 @app.get("/api/schedule")
@@ -808,18 +812,17 @@ def schedule_by_teacher(
     db: Session = Depends(get_db),
 ):
     """
-    Fast cross-group lookup via inverted teacher index (rebuilt on schedule index).
+    Fast cross-group lookup via inverted teacher index (rebuilt on schedule upload).
     """
-    ensure_all_indexed(db, force=False)
     week = get_current_week_type()
     query = q.strip()
 
-    # Ensure index exists for current week (cheap no-op if already built)
-    from teacher_index import load_index
-
+    # Hot path: never re-index Excel here. Only rebuild inverted index if missing.
     if not (load_index(week).get("surnames")):
         try:
-            rebuild_teacher_index(db, week)
+            ensure_all_indexed(db, force=False)
+            if not (load_index(week).get("surnames")):
+                rebuild_teacher_index(db, week)
         except Exception as exc:
             print(f"[teacher-index] lazy rebuild: {exc}")
 

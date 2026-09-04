@@ -8,6 +8,8 @@ struct HomeView: View {
 
     @State private var weekType = DateUtils.currentWeekType()
     @State private var nextLesson: Lesson?
+    @State private var nextLessonDayName: String?
+    @State private var nextLessonIsToday = true
     @State private var news: [NewsItem] = []
     @State private var isLoadingLesson = true
     @State private var isLoadingNews = true
@@ -215,9 +217,20 @@ struct HomeView: View {
     private var nextLessonBlock: some View {
         VStack(spacing: 4) {
             if let lesson = nextLesson {
-                Text("Следующая пара")
+                let heading: String = {
+                    if nextLessonIsToday { return "Следующая пара" }
+                    if isTomorrow(dayName: nextLessonDayName) { return "Завтра" }
+                    if let d = nextLessonDayName, !d.isEmpty { return d }
+                    return "Ближайшая пара"
+                }()
+                Text(heading)
                     .font(.system(size: 15))
                     .foregroundStyle(onHomeMuted)
+                if !nextLessonIsToday, isTomorrow(dayName: nextLessonDayName), let d = nextLessonDayName {
+                    Text(d)
+                        .font(.system(size: 12))
+                        .foregroundStyle(onHomeMuted.opacity(0.85))
+                }
                 Text(lesson.subject)
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(onHome)
@@ -463,7 +476,15 @@ struct HomeView: View {
                 group: group,
                 subgroup: prefs.subgroup
             ), !cached.schedule.isEmpty {
-                nextLesson = ScheduleLogic.findNextLesson(schedule: cached.schedule)
+                if let info = ScheduleLogic.findNextLessonInfo(schedule: cached.schedule) {
+                    nextLesson = info.lesson
+                    nextLessonDayName = info.dayName
+                    nextLessonIsToday = info.isToday
+                } else {
+                    nextLesson = nil
+                    nextLessonDayName = nil
+                    nextLessonIsToday = true
+                }
                 weekType = cached.weekType.isEmpty ? DateUtils.currentWeekType() : cached.weekType
                 updatedLabel = TimeFormat.updatedAtLabel(millis: cached.updatedAtMillis) ?? updatedLabel
                 usingCached = true
@@ -496,12 +517,31 @@ struct HomeView: View {
             subgroup: prefs.subgroup
         )
         if !result.schedule.isEmpty || nextLesson == nil {
-            nextLesson = ScheduleLogic.findNextLesson(schedule: result.schedule)
+            if let info = ScheduleLogic.findNextLessonInfo(schedule: result.schedule) {
+                nextLesson = info.lesson
+                nextLessonDayName = info.dayName
+                nextLessonIsToday = info.isToday
+            } else {
+                nextLesson = nil
+                nextLessonDayName = nil
+                nextLessonIsToday = true
+            }
         }
         if !result.weekType.isEmpty {
             weekType = result.weekType
         }
         return LoadMeta(fromCache: result.isOffline, updatedAt: result.updatedAtMillis)
+    }
+
+    private func isTomorrow(dayName: String?) -> Bool {
+        guard let dayName, !dayName.isEmpty else { return false }
+        let days = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"]
+        let today = DateUtils.todayName()
+        guard let todayIdx = days.firstIndex(where: { $0.caseInsensitiveCompare(today) == .orderedSame }) else {
+            return false
+        }
+        let tomorrow = days[(todayIdx + 1) % days.count]
+        return dayName.caseInsensitiveCompare(tomorrow) == .orderedSame
     }
 
     private func loadNews(force: Bool = false) async -> LoadMeta {

@@ -2,3 +2,4 @@ uploads/
 *.db
 __pycache__/
 .env
+teacher_schedule_index.json

@@ -75,6 +75,7 @@ struct ScheduleView: View {
         .task {
             // No spinner if session cache already has this group (Android-like)
             await cache.load(prefs: prefs, force: false)
+            await ScheduleRepository.shared.prefetchAllGroups()
         }
         .sheet(isPresented: $showFaculty) {
             schedulePickerSheet(
@@ -82,16 +83,29 @@ struct ScheduleView: View {
                 labels: FacultyCatalog.all.map { "\($0.short) — \(FacultyCatalog.fullName($0.id))" }
             ) { index in
                 let fid = FacultyCatalog.all[index].id
-                // Keep previous group until new list loads — avoids Onboarding flash.
+                let defaultCourse = FacultyCatalog.courses(for: fid).first ?? 1
+                // Instant UI from disk cache, then soft network refresh (VPN-friendly).
                 Task {
-                    let loaded = await ScheduleRepository.shared.getGroups(faculty: fid, course: 1)
-                    cache.setGroups(loaded)
-                    let first = loaded.keys.sorted().first
+                    let cached = ScheduleRepository.shared.getGroupsFromCacheOnly(faculty: fid, course: defaultCourse)
+                    if !cached.isEmpty {
+                        cache.setGroups(cached)
+                        let first = cached.keys.sorted().first
+                        prefs.save(
+                            faculty: fid,
+                            course: defaultCourse,
+                            group: first,
+                            subgroup: first.flatMap { cached[$0]?.first }
+                        )
+                    }
+                    let loaded = await ScheduleRepository.shared.refreshGroups(faculty: fid, course: defaultCourse)
+                    let groups = loaded.isEmpty ? cached : loaded
+                    cache.setGroups(groups)
+                    let first = groups.keys.sorted().first
                     prefs.save(
                         faculty: fid,
-                        course: 1,
+                        course: defaultCourse,
                         group: first,
-                        subgroup: first.flatMap { loaded[$0]?.first }
+                        subgroup: first.flatMap { groups[$0]?.first }
                     )
                     cache.invalidate()
                     await cache.load(prefs: prefs, force: true)
@@ -107,14 +121,26 @@ struct ScheduleView: View {
                 let c = courses[index]
                 let fac = prefs.faculty
                 Task {
-                    let loaded = await ScheduleRepository.shared.getGroups(faculty: fac, course: c)
-                    cache.setGroups(loaded)
-                    let first = loaded.keys.sorted().first
+                    let cached = ScheduleRepository.shared.getGroupsFromCacheOnly(faculty: fac, course: c)
+                    if !cached.isEmpty {
+                        cache.setGroups(cached)
+                        let first = cached.keys.sorted().first
+                        prefs.save(
+                            faculty: fac,
+                            course: c,
+                            group: first,
+                            subgroup: first.flatMap { cached[$0]?.first }
+                        )
+                    }
+                    let loaded = await ScheduleRepository.shared.refreshGroups(faculty: fac, course: c)
+                    let groups = loaded.isEmpty ? cached : loaded
+                    cache.setGroups(groups)
+                    let first = groups.keys.sorted().first
                     prefs.save(
                         faculty: fac,
                         course: c,
                         group: first,
-                        subgroup: first.flatMap { loaded[$0]?.first }
+                        subgroup: first.flatMap { groups[$0]?.first }
                     )
                     cache.invalidate()
                     await cache.load(prefs: prefs, force: true)

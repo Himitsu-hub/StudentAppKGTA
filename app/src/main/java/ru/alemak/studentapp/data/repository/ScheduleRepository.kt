@@ -47,14 +47,27 @@ class ScheduleRepository @Inject constructor(
         }
     }
 
+    /** Instant Room read for group picker (no network). */
+    suspend fun getGroupsFromCacheOnly(
+        faculty: String = FacultyCatalog.FAE,
+        course: Int,
+    ): Map<String, List<String>> {
+        val fid = FacultyCatalog.normalize(faculty)
+        return scheduleDao.getGroups(groupsCacheKey(fid, course))?.groups.orEmpty()
+    }
+
     suspend fun getGroups(
         faculty: String = FacultyCatalog.FAE,
         course: Int,
     ): Map<String, List<String>> {
         val fid = FacultyCatalog.normalize(faculty)
         val key = groupsCacheKey(fid, course)
-        // Prefer disk when present so VPN latency does not block the picker.
+        // Prefer disk immediately so VPN never blocks the picker.
         val cached = scheduleDao.getGroups(key)?.groups.orEmpty()
+        if (cached.isNotEmpty()) {
+            // Soft refresh in background is done by prefetchGroups / explicit refresh.
+            return cached
+        }
         val remote = runCatching { api.getGroups(fid, course) }.getOrNull()
         if (remote != null) {
             scheduleDao.upsertGroups(
@@ -68,6 +81,48 @@ class ScheduleRepository @Inject constructor(
             return remote
         }
         return cached
+    }
+
+    /** Force network refresh of groups (pull-to-refresh / first visit). */
+    suspend fun refreshGroups(
+        faculty: String = FacultyCatalog.FAE,
+        course: Int,
+    ): Map<String, List<String>> {
+        val fid = FacultyCatalog.normalize(faculty)
+        val key = groupsCacheKey(fid, course)
+        val remote = runCatching { api.getGroups(fid, course) }.getOrNull()
+        if (remote != null) {
+            scheduleDao.upsertGroups(
+                GroupsCacheEntity(
+                    cacheKey = key,
+                    faculty = fid,
+                    course = course,
+                    groups = remote,
+                ),
+            )
+            return remote
+        }
+        return scheduleDao.getGroups(key)?.groups.orEmpty()
+    }
+
+    /** Warm Room cache for all faculty×course group lists (VPN-friendly switching). */
+    suspend fun prefetchAllGroups() {
+        for (fac in FacultyCatalog.all) {
+            for (course in FacultyCatalog.courses(fac.id)) {
+                val key = groupsCacheKey(fac.id, course)
+                if (scheduleDao.getGroups(key)?.groups?.isNotEmpty() == true) continue
+                runCatching { api.getGroups(fac.id, course) }.getOrNull()?.let { remote ->
+                    scheduleDao.upsertGroups(
+                        GroupsCacheEntity(
+                            cacheKey = key,
+                            faculty = fac.id,
+                            course = course,
+                            groups = remote,
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     suspend fun getSchedule(

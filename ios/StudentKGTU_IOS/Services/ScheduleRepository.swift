@@ -8,22 +8,53 @@ struct LoadMeta {
 actor ScheduleRepository {
     static let shared = ScheduleRepository()
 
+    /// Instant disk read for group picker (no network).
+    nonisolated func getGroupsFromCacheOnly(faculty: String = FacultyCatalog.fae, course: Int) -> [String: [String]] {
+        let key = "groups_\(faculty)_\(course)"
+        return JSONCache.load([String: [String]].self, key: key)
+            ?? JSONCache.load([String: [String]].self, key: "groups_\(course)")
+            ?? [:]
+    }
+
     func getGroups(faculty: String = FacultyCatalog.fae, course: Int) async -> [String: [String]] {
         let key = "groups_\(faculty)_\(course)"
-        // Offline-first: return disk cache immediately if no network
+        // Prefer disk immediately so VPN never blocks the picker.
+        let cached = getGroupsFromCacheOnly(faculty: faculty, course: course)
+        if !cached.isEmpty {
+            return cached
+        }
         if !NetworkMonitor.shared.isOnline {
-            return JSONCache.load([String: [String]].self, key: key)
-                ?? JSONCache.load([String: [String]].self, key: "groups_\(course)")
-                ?? [:]
+            return [:]
         }
         do {
             let remote = try await APIClient.shared.groups(faculty: faculty, course: course)
             JSONCache.save(remote, key: key)
             return remote
         } catch {
-            return JSONCache.load([String: [String]].self, key: key)
-                ?? JSONCache.load([String: [String]].self, key: "groups_\(course)")
-                ?? [:]
+            return getGroupsFromCacheOnly(faculty: faculty, course: course)
+        }
+    }
+
+    /// Force network refresh of groups (pull-to-refresh / first visit).
+    func refreshGroups(faculty: String = FacultyCatalog.fae, course: Int) async -> [String: [String]] {
+        let key = "groups_\(faculty)_\(course)"
+        do {
+            let remote = try await APIClient.shared.groups(faculty: faculty, course: course)
+            JSONCache.save(remote, key: key)
+            return remote
+        } catch {
+            return getGroupsFromCacheOnly(faculty: faculty, course: course)
+        }
+    }
+
+    /// Warm disk cache for all faculty×course group lists.
+    func prefetchAllGroups() async {
+        for fac in FacultyCatalog.all {
+            for course in FacultyCatalog.courses(for: fac.id) {
+                let cached = getGroupsFromCacheOnly(faculty: fac.id, course: course)
+                if !cached.isEmpty { continue }
+                _ = await refreshGroups(faculty: fac.id, course: course)
+            }
         }
     }
 

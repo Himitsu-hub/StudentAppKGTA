@@ -61,23 +61,48 @@ class ScheduleViewModel @Inject constructor(
                 selection.group,
                 selection.subgroup,
             )
+            // Warm all faculty×course group lists so VPN switching stays instant.
+            runCatching { scheduleRepository.prefetchAllGroups() }
         }
     }
 
     fun selectFaculty(faculty: String) {
         viewModelScope.launch {
             val fid = FacultyCatalog.normalize(faculty)
+            val defaultCourse = FacultyCatalog.courses(fid).firstOrNull() ?: 1
+            // Optimistic UI: show cached groups immediately, don't blank the screen.
+            val cachedGroups = scheduleRepository.getGroupsFromCacheOnly(fid, defaultCourse)
             _uiState.update {
-                it.copy(faculty = fid, course = 1, group = null, subgroup = null, schedule = emptyList())
+                it.copy(
+                    faculty = fid,
+                    course = defaultCourse,
+                    group = null,
+                    subgroup = null,
+                    groups = cachedGroups,
+                    schedule = emptyList(),
+                    isLoading = cachedGroups.isEmpty(),
+                    error = null,
+                )
             }
-            loadForSelection(fid, 1, null, null)
+            loadForSelection(fid, defaultCourse, null, null)
         }
     }
 
     fun selectCourse(course: Int) {
         viewModelScope.launch {
             val faculty = _uiState.value.faculty
-            _uiState.update { it.copy(course = course, group = null, subgroup = null, schedule = emptyList()) }
+            val cachedGroups = scheduleRepository.getGroupsFromCacheOnly(faculty, course)
+            _uiState.update {
+                it.copy(
+                    course = course,
+                    group = null,
+                    subgroup = null,
+                    groups = cachedGroups,
+                    schedule = emptyList(),
+                    isLoading = cachedGroups.isEmpty(),
+                    error = null,
+                )
+            }
             loadForSelection(faculty, course, null, null)
         }
     }
@@ -128,7 +153,26 @@ class ScheduleViewModel @Inject constructor(
             )
         }
         try {
-            val groups = scheduleRepository.getGroups(fid, course)
+            // Cache-first paint, then soft network refresh (VPN-friendly).
+            var groups = scheduleRepository.getGroupsFromCacheOnly(fid, course)
+            if (groups.isNotEmpty()) {
+                _uiState.update { it.copy(groups = groups, isLoading = false) }
+            }
+            groups = if (pullRefresh || groups.isEmpty()) {
+                scheduleRepository.refreshGroups(fid, course).ifEmpty { groups }
+            } else {
+                // Keep UI snappy; refresh in background without blocking switch.
+                viewModelScope.launch {
+                    val fresh = scheduleRepository.refreshGroups(fid, course)
+                    if (fresh.isNotEmpty() &&
+                        _uiState.value.faculty == fid &&
+                        _uiState.value.course == course
+                    ) {
+                        _uiState.update { it.copy(groups = fresh) }
+                    }
+                }
+                groups
+            }
             if (groups.isEmpty()) {
                 _uiState.update {
                     it.copy(

@@ -18,7 +18,8 @@ def _surname_bucket(teacher_field: str) -> str:
     key = parse_teacher_key(teacher_field)
     if key and key[0]:
         return key[0]
-    return (teacher_field or "").strip().lower()[:40]
+    raw = (teacher_field or "").strip().lower()[:40]
+    return raw.replace("ё", "е")
 
 
 def rebuild_teacher_index(db, week_type: str) -> dict:
@@ -114,8 +115,8 @@ def lookup_lessons(query: str, week_type: str, day_filter: Optional[set] = None)
     buckets: List[str] = []
     if q_key and q_key[0]:
         buckets.append(q_key[0])
-    # Also try raw lower surname token
-    raw = (query or "").strip().lower().split()
+    # Also try raw lower surname token (ё → е)
+    raw = (query or "").strip().lower().replace("ё", "е").split()
     if raw and raw[0] not in buckets:
         buckets.append(raw[0])
 

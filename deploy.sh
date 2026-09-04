@@ -29,7 +29,7 @@ fi
 echo "1/6 Copying code to $S:$REMOTE_DIR ..."
 ssh "$S" "mkdir -p $REMOTE_DIR/uploads $REMOTE_DIR/scripts $REMOTE_DIR/static"
 scp "$D/main.py" "$D/database.py" "$D/parser.py" "$D/scraper.py" "$D/news_scraper.py" \
-    "$D/schedule_validator.py" "$D/faculties.py" "$D/teacher_match.py" \
+    "$D/schedule_validator.py" "$D/faculties.py" "$D/teacher_match.py" "$D/teacher_index.py" \
     "$D/requirements.txt" "$D/Dockerfile" "$D/docker-compose.yml" "$D/Caddyfile" \
     "$S:$REMOTE_DIR/"
 if [[ -d "$D/static" ]]; then

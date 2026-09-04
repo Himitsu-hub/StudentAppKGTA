@@ -35,6 +35,10 @@ import ru.alemak.studentapp.widget.ScheduleWidgetUpdater
 data class HomeUiState(
     val weekType: String = DateUtils.getCurrentWeekType(),
     val nextLesson: Lesson? = null,
+    /** Day name of nextLesson (Понедельник…). */
+    val nextLessonDayName: String? = null,
+    /** false → next lesson is on a later day (show «Завтра» / day badge). */
+    val nextLessonIsToday: Boolean = true,
     /** Summer break (Jul–Aug): show «Каникулы» instead of next pair */
     val isVacation: Boolean = HolidayUtils.isSummerVacation(),
     val vacationTitle: String? = HolidayUtils.academicBreakTitle(),
@@ -186,6 +190,8 @@ class HomeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         nextLesson = null,
+                        nextLessonDayName = null,
+                        nextLessonIsToday = true,
                         isVacation = true,
                         vacationTitle = HolidayUtils.academicBreakTitle(),
                         vacationSubtitle = HolidayUtils.academicBreakSubtitle(),
@@ -203,6 +209,8 @@ class HomeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         nextLesson = null,
+                        nextLessonDayName = null,
+                        nextLessonIsToday = true,
                         isVacation = false,
                         hasGroup = false,
                         isLoadingLesson = false,
@@ -219,10 +227,12 @@ class HomeViewModel @Inject constructor(
                 subgroup = selection.subgroup,
             )
             if (cached != null && cached.schedule.isNotEmpty()) {
-                val lesson = scheduleRepository.findNextLesson(cached.schedule)
+                val info = scheduleRepository.findNextLessonInfo(cached.schedule)
                 _uiState.update {
                     it.copy(
-                        nextLesson = lesson,
+                        nextLesson = info?.lesson,
+                        nextLessonDayName = info?.dayName,
+                        nextLessonIsToday = info?.isToday ?: true,
                         weekType = cached.weekType.ifBlank { it.weekType },
                         isVacation = false,
                         vacationTitle = null,
@@ -242,10 +252,12 @@ class HomeViewModel @Inject constructor(
                 group = selection.group,
                 subgroup = selection.subgroup,
             )
-            val lesson = scheduleRepository.findNextLesson(result.schedule)
+            val info = scheduleRepository.findNextLessonInfo(result.schedule)
             _uiState.update {
                 it.copy(
-                    nextLesson = lesson,
+                    nextLesson = info?.lesson,
+                    nextLessonDayName = info?.dayName,
+                    nextLessonIsToday = info?.isToday ?: true,
                     weekType = result.weekType.ifBlank { it.weekType },
                     isVacation = false,
                     vacationTitle = null,

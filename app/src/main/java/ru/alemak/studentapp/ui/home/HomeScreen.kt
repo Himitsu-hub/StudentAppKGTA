@@ -194,7 +194,12 @@ fun HomeScreen(
                                 modifier = Modifier.padding(horizontal = 12.dp),
                             )
                         }
-                        else -> NextLessonBlock(state.nextLesson, darkTheme = darkTheme)
+                        else -> NextLessonBlock(
+                            lesson = state.nextLesson,
+                            darkTheme = darkTheme,
+                            isToday = state.nextLessonIsToday,
+                            dayName = state.nextLessonDayName,
+                        )
                     }
 
                     Spacer(Modifier.weight(1f))
@@ -265,6 +270,8 @@ private fun NextLessonBlock(
     darkTheme: Boolean,
     vacationTitle: String? = null,
     vacationSubtitle: String? = null,
+    isToday: Boolean = true,
+    dayName: String? = null,
 ) {
     val primary = if (darkTheme) DarkOnSurface else Color.White
     val muted = if (darkTheme) DarkOnSurfaceMuted else Color.White.copy(alpha = 0.75f)
@@ -289,11 +296,25 @@ private fun NextLessonBlock(
                 )
             }
         } else if (lesson != null) {
+            val heading = when {
+                isToday -> "Следующая пара"
+                isTomorrowLabel(dayName) -> "Завтра"
+                !dayName.isNullOrBlank() -> dayName
+                else -> "Ближайшая пара"
+            }
             Text(
-                text = "Следующая пара",
+                text = heading,
                 color = muted,
                 fontSize = 15.sp,
             )
+            if (!isToday && !dayName.isNullOrBlank() && isTomorrowLabel(dayName)) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = dayName,
+                    color = muted.copy(alpha = 0.85f),
+                    fontSize = 12.sp,
+                )
+            }
             Spacer(Modifier.height(4.dp))
             Text(
                 text = lesson.subject,
@@ -333,6 +354,17 @@ private fun NextLessonBlock(
             )
         }
     }
+}
+
+/** True when [dayName] is the calendar day after today (Mon→Tue … Sat→Mon). */
+private fun isTomorrowLabel(dayName: String?): Boolean {
+    if (dayName.isNullOrBlank()) return false
+    val days = listOf("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота")
+    val today = ru.alemak.studentapp.util.DateUtils.getTodayName()
+    val todayIdx = days.indexOfFirst { it.equals(today, ignoreCase = true) }
+    if (todayIdx < 0) return false
+    val tomorrow = days[(todayIdx + 1) % days.size]
+    return dayName.equals(tomorrow, ignoreCase = true)
 }
 
 @Composable
