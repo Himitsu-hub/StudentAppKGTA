@@ -142,7 +142,7 @@ actor ScheduleRepository {
         if let cached = JSONCache.load(TeacherScheduleResponse.self, key: cacheKey) {
             return cached
         }
-        return TeacherScheduleResponse(query: query, day: day, weekType: week)
+        return TeacherScheduleResponse(query: query, weekType: week, day: day)
     }
 
     private nonisolated static func cacheKey(
