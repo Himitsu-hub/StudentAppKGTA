@@ -29,11 +29,33 @@ actor TeachersRepository {
     }
 
     nonisolated private static func ensureLeadership(_ teachers: [Teacher]) -> [Teacher] {
-        let existing = Set(teachers.map { $0.name.lowercased().replacingOccurrences(of: "ё", with: "е") })
         let rectorName = "Егоров Алексей Васильевич"
         let key = rectorName.lowercased().replacingOccurrences(of: "ё", with: "е")
-        guard !existing.contains(key) else { return teachers }
-        let rector = Teacher(name: rectorName, position: "Ректор")
-        return [rector] + teachers
+        var list = teachers
+        if let idx = list.firstIndex(where: {
+            $0.name.lowercased().replacingOccurrences(of: "ё", with: "е") == key
+        }) {
+            if list[idx].photo_url.trimmingCharacters(in: .whitespaces).isEmpty {
+                list[idx].photo_url = "https://dksta.ru/d/egorov_av.jpg"
+            }
+            if list[idx].profile_url.trimmingCharacters(in: .whitespaces).isEmpty {
+                list[idx].profile_url = "https://dksta.ru/egorov-aleksey-vasilyevich"
+            }
+            if list[idx].position.trimmingCharacters(in: .whitespaces).isEmpty {
+                list[idx].position = "И.о. ректора"
+            }
+            if list[idx].email.trimmingCharacters(in: .whitespaces).isEmpty {
+                list[idx].email = "egorov@dksta.ru"
+            }
+            return list
+        }
+        let rector = Teacher(
+            name: rectorName,
+            profile_url: "https://dksta.ru/egorov-aleksey-vasilyevich",
+            photo_url: "https://dksta.ru/d/egorov_av.jpg",
+            position: "И.о. ректора",
+            email: "egorov@dksta.ru"
+        )
+        return [rector] + list
     }
 }

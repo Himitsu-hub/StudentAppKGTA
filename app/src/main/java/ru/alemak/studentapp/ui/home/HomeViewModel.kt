@@ -220,11 +220,13 @@ class HomeViewModel @Inject constructor(
             }
 
             // VPN-friendly: paint disk cache immediately, then refresh from network.
+            val weekNow = DateUtils.getCurrentWeekType()
             val cached = scheduleRepository.getScheduleFromCacheOnly(
                 faculty = selection.faculty,
                 course = selection.course,
                 group = selection.group,
                 subgroup = selection.subgroup,
+                weekType = weekNow,
             )
             if (cached != null && cached.schedule.isNotEmpty()) {
                 val info = scheduleRepository.findNextLessonInfo(cached.schedule)
@@ -233,7 +235,8 @@ class HomeViewModel @Inject constructor(
                         nextLesson = info?.lesson,
                         nextLessonDayName = info?.dayName,
                         nextLessonIsToday = info?.isToday ?: true,
-                        weekType = cached.weekType.ifBlank { it.weekType },
+                        // Keep calendar week label on home; pair may belong to other week.
+                        weekType = weekNow,
                         isVacation = false,
                         vacationTitle = null,
                         vacationSubtitle = null,
@@ -246,19 +249,25 @@ class HomeViewModel @Inject constructor(
                 }
             }
 
-            val result = scheduleRepository.getSchedule(
+            val info = scheduleRepository.findNextLessonInfoForSelection(
                 faculty = selection.faculty,
                 course = selection.course,
-                group = selection.group,
+                group = selection.group!!,
                 subgroup = selection.subgroup,
             )
-            val info = scheduleRepository.findNextLessonInfo(result.schedule)
+            val stamp = scheduleRepository.getSchedule(
+                faculty = selection.faculty,
+                course = selection.course,
+                group = selection.group!!,
+                subgroup = selection.subgroup,
+                weekType = weekNow,
+            )
             _uiState.update {
                 it.copy(
                     nextLesson = info?.lesson,
                     nextLessonDayName = info?.dayName,
                     nextLessonIsToday = info?.isToday ?: true,
-                    weekType = result.weekType.ifBlank { it.weekType },
+                    weekType = weekNow,
                     isVacation = false,
                     vacationTitle = null,
                     vacationSubtitle = null,
@@ -267,7 +276,7 @@ class HomeViewModel @Inject constructor(
                 )
             }
             widgetUpdater.updateAsync()
-            LoadMeta(fromCache = result.isOffline, updatedAt = result.updatedAtMillis)
+            LoadMeta(fromCache = stamp.isOffline, updatedAt = stamp.updatedAtMillis)
         } catch (e: Exception) {
             _uiState.update {
                 it.copy(

@@ -78,6 +78,14 @@ class ScheduleWidgetUpdater @Inject constructor(
                     append(selection.subgroup)
                 }
             }
+            val next = runCatching {
+                scheduleRepository.findNextLessonInfoForSelection(
+                    faculty = selection.faculty,
+                    course = selection.course,
+                    group = selection.group!!,
+                    subgroup = selection.subgroup,
+                )
+            }.getOrNull()
             val result = runCatching {
                 scheduleRepository.getSchedule(
                     faculty = selection.faculty,
@@ -86,8 +94,6 @@ class ScheduleWidgetUpdater @Inject constructor(
                     subgroup = selection.subgroup,
                 )
             }.getOrNull()
-
-            val next = result?.let { scheduleRepository.findNextLessonInfo(it.schedule) }
             if (next != null) {
                 val lesson = next.lesson
                 val dayLabel = if (next.isToday) "сегодня" else shortDay(next.dayName)

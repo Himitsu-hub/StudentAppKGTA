@@ -117,7 +117,11 @@ fun ScheduleScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     SelectionChip(
-                        text = "Показать $otherWeek",
+                        text = if (isCalendarWeek) {
+                            "Показать $otherWeek"
+                        } else {
+                            "Показать текущее расписание"
+                        },
                         onClick = { viewModel.toggleWeekType() },
                         compact = true,
                         modifier = Modifier

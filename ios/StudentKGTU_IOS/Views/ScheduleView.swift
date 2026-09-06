@@ -35,7 +35,10 @@ struct ScheduleView: View {
                     Text("Неделя: \(cache.weekType)\(isCalendar ? " · сейчас" : "")")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(accent)
-                    selectionChip("Показать \(otherWeek)", compact: true) {
+                    selectionChip(
+                        isCalendar ? "Показать \(otherWeek)" : "Показать текущее расписание",
+                        compact: true
+                    ) {
                         Task { await cache.toggleWeekType(prefs: prefs) }
                     }
 

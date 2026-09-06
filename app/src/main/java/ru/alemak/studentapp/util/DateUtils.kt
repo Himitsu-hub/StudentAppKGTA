@@ -14,6 +14,19 @@ object DateUtils {
         return if (weeksDiff % 2 == 0) "Числитель" else "Знаменатель"
     }
 
+    /** Opposite academic week type. */
+    fun otherWeekType(weekType: String): String =
+        if (weekType == "Числитель") "Знаменатель" else "Числитель"
+
+    /**
+     * Week type for a named weekday relative to [now]
+     * (e.g. on Sunday, «Понедельник» → next calendar Monday's week type).
+     */
+    fun weekTypeForDayName(dayName: String, now: Calendar = Calendar.getInstance()): String {
+        val target = Calendar.getInstance().apply { time = getDateForDay(dayName, now) }
+        return getCurrentWeekType(target)
+    }
+
     fun getSemesterStarts(now: Calendar = Calendar.getInstance()): Pair<Calendar, Calendar> {
         val year = now.get(Calendar.YEAR)
         val month = now.get(Calendar.MONTH)

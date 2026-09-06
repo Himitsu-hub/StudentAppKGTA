@@ -62,7 +62,13 @@ enum WidgetUpdater {
                 group: group!,
                 subgroup: subgroup
             )
-            if let next = ScheduleLogic.findNextLessonInfo(schedule: result.schedule) {
+            let next = await ScheduleLogic.findNextLessonInfoAcrossWeeks(
+                faculty: faculty,
+                course: course,
+                group: group!,
+                subgroup: subgroup
+            )
+            if let next {
                 let lesson = next.lesson
                 let dayLabel = next.isToday ? "сегодня" : shortDay(next.dayName)
                 var details = ""

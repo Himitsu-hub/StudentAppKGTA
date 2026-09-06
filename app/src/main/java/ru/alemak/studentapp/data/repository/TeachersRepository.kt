@@ -41,15 +41,23 @@ class TeachersRepository @Inject constructor(
 
     /** Rector may be missing from scraped кафедра pages — keep him in the list. */
     private fun ensureLeadership(teachers: List<Teacher>): List<Teacher> {
-        val existing = teachers.map { it.name.lowercase().replace('ё', 'е') }.toSet()
-        val extras = mutableListOf<Teacher>()
         val rector = Teacher(
             name = "Егоров Алексей Васильевич",
-            position = "Ректор",
+            profileUrl = "https://dksta.ru/egorov-aleksey-vasilyevich",
+            photoUrl = "https://dksta.ru/d/egorov_av.jpg",
+            position = "И.о. ректора",
+            email = "egorov@dksta.ru",
         )
-        if (rector.name.lowercase().replace('ё', 'е') !in existing) {
-            extras += rector
-        }
-        return if (extras.isEmpty()) teachers else extras + teachers
+        val key = rector.name.lowercase().replace('ё', 'е')
+        val idx = teachers.indexOfFirst { it.name.lowercase().replace('ё', 'е') == key }
+        if (idx < 0) return listOf(rector) + teachers
+        val old = teachers[idx]
+        val merged = old.copy(
+            profileUrl = old.profileUrl.ifBlank { rector.profileUrl },
+            photoUrl = old.photoUrl.ifBlank { rector.photoUrl },
+            position = old.position.ifBlank { rector.position },
+            email = old.email.ifBlank { rector.email },
+        )
+        return teachers.toMutableList().also { it[idx] = merged }
     }
 }

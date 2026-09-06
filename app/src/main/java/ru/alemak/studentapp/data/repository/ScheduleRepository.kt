@@ -294,21 +294,93 @@ class ScheduleRepository @Inject constructor(
         course: Int,
         group: String,
         subgroup: String?,
-    ): Lesson? {
-        val result = getSchedule(faculty, course, group, subgroup)
-        return findNextLesson(result.schedule)
-    }
+    ): Lesson? = findNextLessonInfoForSelection(faculty, course, group, subgroup)?.lesson
 
     fun findNextLesson(schedule: List<ru.alemak.studentapp.data.model.ScheduleDay>): Lesson? =
         findNextLessonInfo(schedule)?.lesson
 
     fun findNextLessonInfo(schedule: List<ru.alemak.studentapp.data.model.ScheduleDay>): NextLessonInfo? {
         val now = Calendar.getInstance()
-        val todayName = DateUtils.getTodayName()
-        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val todayName = DateUtils.getTodayName(now)
+        val weekNow = DateUtils.getCurrentWeekType(now)
 
+        upcomingToday(schedule, todayName, now)?.let { lesson ->
+            return NextLessonInfo(lesson, todayName, isToday = true, weekType = weekNow)
+        }
+
+        val days = listOf("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота")
+        val currIndex = days.indexOfFirst { it.equals(todayName, ignoreCase = true) }
+        // Sunday (or unknown): start from Monday.
+        val startOffset = if (currIndex == -1) 0 else 1
+        val baseIndex = if (currIndex == -1) -1 else currIndex
+
+        for (i in startOffset..6) {
+            val nextDayName = if (currIndex == -1) {
+                days[i]
+            } else {
+                days[(baseIndex + i) % days.size]
+            }
+            val first = firstRealLesson(schedule, nextDayName) ?: continue
+            val weekForDay = DateUtils.weekTypeForDayName(nextDayName, now)
+            return NextLessonInfo(first, nextDayName, isToday = false, weekType = weekForDay)
+        }
+        return null
+    }
+
+    /**
+     * Home/widget: if the next pair falls on a day that belongs to the *other*
+     * academic week (typical Sun→Mon flip), load that week's schedule.
+     */
+    suspend fun findNextLessonInfoForSelection(
+        faculty: String,
+        course: Int,
+        group: String,
+        subgroup: String?,
+    ): NextLessonInfo? {
+        val now = Calendar.getInstance()
+        val todayName = DateUtils.getTodayName(now)
+        val weekNow = DateUtils.getCurrentWeekType(now)
+        val current = getSchedule(faculty, course, group, subgroup, weekType = weekNow)
+
+        upcomingToday(current.schedule, todayName, now)?.let { lesson ->
+            return NextLessonInfo(lesson, todayName, isToday = true, weekType = weekNow)
+        }
+
+        val days = listOf("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота")
+        val currIndex = days.indexOfFirst { it.equals(todayName, ignoreCase = true) }
+        val orderedDays = if (currIndex == -1) {
+            days
+        } else {
+            (1..6).map { days[(currIndex + it) % days.size] }
+        }
+
+        var otherSchedule: ScheduleResult? = null
+        for (nextDayName in orderedDays) {
+            val weekForDay = DateUtils.weekTypeForDayName(nextDayName, now)
+            val schedule = if (weekForDay == weekNow) {
+                current.schedule
+            } else {
+                if (otherSchedule == null) {
+                    otherSchedule = getSchedule(
+                        faculty, course, group, subgroup, weekType = weekForDay,
+                    )
+                }
+                otherSchedule.schedule
+            }
+            val first = firstRealLesson(schedule, nextDayName) ?: continue
+            return NextLessonInfo(first, nextDayName, isToday = false, weekType = weekForDay)
+        }
+        return null
+    }
+
+    private fun upcomingToday(
+        schedule: List<ru.alemak.studentapp.data.model.ScheduleDay>,
+        todayName: String,
+        now: Calendar,
+    ): Lesson? {
+        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
         val todaySchedule = schedule.find { it.dayName.equals(todayName, ignoreCase = true) }
-        val upcomingToday = todaySchedule?.lessons?.firstOrNull { lesson ->
+        return todaySchedule?.lessons?.firstOrNull { lesson ->
             if (lesson.type.equals("праздник", ignoreCase = true)) return@firstOrNull false
             if (lesson.subject.isBlank()) return@firstOrNull false
             try {
@@ -327,25 +399,15 @@ class ScheduleRepository @Inject constructor(
                 false
             }
         }
-        if (upcomingToday != null) {
-            return NextLessonInfo(upcomingToday, todayName, isToday = true)
-        }
-
-        val days = listOf("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота")
-        val currIndex = days.indexOfFirst { it.equals(todayName, ignoreCase = true) }
-        if (currIndex == -1) return null
-
-        for (i in 1..6) {
-            val nextDayName = days[(currIndex + i) % days.size]
-            val first = schedule.find { it.dayName.equals(nextDayName, ignoreCase = true) }
-                ?.lessons
-                ?.firstOrNull { !it.type.equals("праздник", true) && it.subject.isNotBlank() }
-            if (first != null) {
-                return NextLessonInfo(first, nextDayName, isToday = false)
-            }
-        }
-        return null
     }
+
+    private fun firstRealLesson(
+        schedule: List<ru.alemak.studentapp.data.model.ScheduleDay>,
+        dayName: String,
+    ): Lesson? =
+        schedule.find { it.dayName.equals(dayName, ignoreCase = true) }
+            ?.lessons
+            ?.firstOrNull { !it.type.equals("праздник", true) && it.subject.isNotBlank() }
 
     private fun groupsCacheKey(faculty: String, course: Int): String =
         "${FacultyCatalog.normalize(faculty)}_$course"

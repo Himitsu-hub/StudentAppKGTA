@@ -13,6 +13,15 @@ enum DateUtils: Sendable {
         return weeks % 2 == 0 ? "Числитель" : "Знаменатель"
     }
 
+    static func otherWeekType(_ weekType: String) -> String {
+        weekType == "Числитель" ? "Знаменатель" : "Числитель"
+    }
+
+    /// Week type for a named weekday relative to `now` (Sun → next Monday may flip).
+    static func weekTypeForDayName(_ dayName: String, now: Date = Date()) -> String {
+        currentWeekType(now: dateForDay(dayName, now: now))
+    }
+
     static func semesterStart(for now: Date) -> Date {
         let y = cal.component(.year, from: now)
         let m = cal.component(.month, from: now)

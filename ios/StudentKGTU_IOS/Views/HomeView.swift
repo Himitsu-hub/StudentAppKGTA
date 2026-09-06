@@ -470,11 +470,13 @@ struct HomeView: View {
             weekType = "Каникулы"
             nextLesson = nil
         } else if let group = prefs.group, !group.isEmpty {
+            let weekNow = DateUtils.currentWeekType()
             if let cached = ScheduleRepository.shared.getScheduleFromCacheOnly(
                 faculty: prefs.faculty,
                 course: prefs.course,
                 group: group,
-                subgroup: prefs.subgroup
+                subgroup: prefs.subgroup,
+                weekType: weekNow
             ), !cached.schedule.isEmpty {
                 if let info = ScheduleLogic.findNextLessonInfo(schedule: cached.schedule) {
                     nextLesson = info.lesson
@@ -485,7 +487,7 @@ struct HomeView: View {
                     nextLessonDayName = nil
                     nextLessonIsToday = true
                 }
-                weekType = cached.weekType.isEmpty ? DateUtils.currentWeekType() : cached.weekType
+                weekType = weekNow
                 updatedLabel = TimeFormat.updatedAtLabel(millis: cached.updatedAtMillis) ?? updatedLabel
                 usingCached = true
             }
@@ -510,26 +512,31 @@ struct HomeView: View {
             nextLesson = nil
             return LoadMeta(fromCache: false, updatedAt: 0)
         }
-        let result = await ScheduleRepository.shared.getSchedule(
+        let weekNow = DateUtils.currentWeekType()
+        let info = await ScheduleLogic.findNextLessonInfoAcrossWeeks(
             faculty: prefs.faculty,
             course: prefs.course,
             group: group,
             subgroup: prefs.subgroup
         )
-        if !result.schedule.isEmpty || nextLesson == nil {
-            if let info = ScheduleLogic.findNextLessonInfo(schedule: result.schedule) {
-                nextLesson = info.lesson
-                nextLessonDayName = info.dayName
-                nextLessonIsToday = info.isToday
-            } else {
-                nextLesson = nil
-                nextLessonDayName = nil
-                nextLessonIsToday = true
-            }
+        if let info {
+            nextLesson = info.lesson
+            nextLessonDayName = info.dayName
+            nextLessonIsToday = info.isToday
+        } else {
+            nextLesson = nil
+            nextLessonDayName = nil
+            nextLessonIsToday = true
         }
-        if !result.weekType.isEmpty {
-            weekType = result.weekType
-        }
+        weekType = weekNow
+        // Prefer network stamp from current-week fetch for «Обновлено».
+        let result = await ScheduleRepository.shared.getSchedule(
+            faculty: prefs.faculty,
+            course: prefs.course,
+            group: group,
+            subgroup: prefs.subgroup,
+            weekType: weekNow
+        )
         return LoadMeta(fromCache: result.isOffline, updatedAt: result.updatedAtMillis)
     }
 

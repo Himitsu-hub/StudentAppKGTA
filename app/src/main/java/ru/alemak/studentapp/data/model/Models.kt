@@ -13,6 +13,8 @@ data class NextLessonInfo(
     val lesson: Lesson,
     val dayName: String,
     val isToday: Boolean,
+    /** Academic week of this pair (may differ from «today» on Sun→Mon boundary). */
+    val weekType: String = "",
 )
 
 data class ScheduleDay(

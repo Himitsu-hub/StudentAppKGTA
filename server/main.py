@@ -366,10 +366,10 @@ def _normalize_teacher_position(pos: str) -> str:
 _LEADERSHIP_TEACHERS = [
     {
         "name": "Егоров Алексей Васильевич",
-        "profile_url": "https://dksta.ru/",
-        "photo_url": "",
-        "position": "Ректор",
-        "email": "",
+        "profile_url": "https://dksta.ru/egorov-aleksey-vasilyevich",
+        "photo_url": "https://dksta.ru/d/egorov_av.jpg",
+        "position": "И.о. ректора",
+        "email": "egorov@dksta.ru",
         "subjects": [],
     },
 ]
@@ -379,16 +379,22 @@ def _ensure_leadership(teachers: list) -> list:
     """Inject rector/vice-rectors if missing from scraped ППС lists."""
     if not isinstance(teachers, list):
         return teachers
-    existing = {
-        (t.get("name") or "").strip().lower().replace("ё", "е")
+    by_name = {
+        (t.get("name") or "").strip().lower().replace("ё", "е"): t
         for t in teachers
         if isinstance(t, dict)
     }
     extra = []
     for lead in _LEADERSHIP_TEACHERS:
         key = lead["name"].strip().lower().replace("ё", "е")
-        if key not in existing:
+        if key not in by_name:
             extra.append(dict(lead))
+            continue
+        # Fill missing photo/profile/email for known leadership entries.
+        row = by_name[key]
+        for field in ("photo_url", "profile_url", "email", "position"):
+            if not (row.get(field) or "").strip() and lead.get(field):
+                row[field] = lead[field]
     return extra + teachers if extra else teachers
 
 

@@ -302,6 +302,7 @@ private fun NextLessonBlock(
                 !dayName.isNullOrBlank() -> dayName
                 else -> "Ближайшая пара"
             }
+            // Note: week type for that pair may flip Sun→Mon; shown via «Завтра» + day.
             Text(
                 text = heading,
                 color = muted,

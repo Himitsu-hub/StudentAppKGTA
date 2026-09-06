@@ -209,4 +209,6 @@ struct NextLessonInfo {
     let lesson: Lesson
     let dayName: String
     let isToday: Bool
+    /// Academic week of this pair (may differ from today on Sun→Mon).
+    var weekType: String = ""
 }
