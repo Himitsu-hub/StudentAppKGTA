@@ -372,7 +372,18 @@ def get_news_fast(limit: int = 15, force: bool = False) -> list[dict[str, Any]]:
     """
     cached = load_cached_news()
     age = cache_age_seconds()
+    # Mark that a client asked for news (helps diagnose «stuck yesterday» labels).
+    try:
+        meta = load_meta()
+        meta["last_client_ts"] = time.time()
+        if force:
+            meta["last_force_ts"] = time.time()
+        with open(META_PATH, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
     if cached:
+        # Always refresh in background when forced; also if older than FRESH_SECONDS.
         if force or age >= FRESH_SECONDS:
             request_background_scrape(max(limit, 20))
         return _sorted(cached)[:limit]

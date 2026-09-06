@@ -21,9 +21,9 @@ object FacultyCatalog {
     }
 
     fun fullName(id: String): String = when (id) {
-        MTF -> "Машиностроительный технологический"
+        MTF -> "Механико-технологический факультет"
         MASTERS -> "Магистратура (очное)"
-        else -> "Автоматика и электроника"
+        else -> "Факультет автоматики и электроники"
     }
 
     fun courses(forId: String): List<Int> = when (forId) {

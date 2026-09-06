@@ -362,16 +362,47 @@ def _normalize_teacher_position(pos: str) -> str:
     return s.strip(" ,;")
 
 
+# Leadership not always present on кафедра ППС pages — keep them at the top of the list.
+_LEADERSHIP_TEACHERS = [
+    {
+        "name": "Егоров Алексей Васильевич",
+        "profile_url": "https://dksta.ru/",
+        "photo_url": "",
+        "position": "Ректор",
+        "email": "",
+        "subjects": [],
+    },
+]
+
+
+def _ensure_leadership(teachers: list) -> list:
+    """Inject rector/vice-rectors if missing from scraped ППС lists."""
+    if not isinstance(teachers, list):
+        return teachers
+    existing = {
+        (t.get("name") or "").strip().lower().replace("ё", "е")
+        for t in teachers
+        if isinstance(t, dict)
+    }
+    extra = []
+    for lead in _LEADERSHIP_TEACHERS:
+        key = lead["name"].strip().lower().replace("ё", "е")
+        if key not in existing:
+            extra.append(dict(lead))
+    return extra + teachers if extra else teachers
+
+
 @app.get("/api/teachers")
 def get_teachers():
     if not TEACHERS_FILE.exists():
-        return {"teachers": []}
+        return {"teachers": _ensure_leadership([])}
     with open(TEACHERS_FILE, "r", encoding="utf-8") as f:
         teachers = json.load(f)
     if isinstance(teachers, list):
         for t in teachers:
             if isinstance(t, dict) and "position" in t:
                 t["position"] = _normalize_teacher_position(str(t.get("position") or ""))
+        teachers = _ensure_leadership(teachers)
     meta = {}
     try:
         st = TEACHERS_FILE.stat()
@@ -415,7 +446,18 @@ def get_news(
     except Exception as exc:
         print(f"[news] api scrape failed: {exc}")
         news = load_cached_news()[:limit]
-    return {"news": news, "count": len(news)}
+    from news_scraper import load_meta
+
+    meta = load_meta()
+    scraped_ts = float(meta.get("last_scrape_ts") or 0)
+    return {
+        "news": news,
+        "count": len(news),
+        # Clients use this for «Обновлено …» — seconds since epoch.
+        "updatedAt": scraped_ts if scraped_ts > 0 else None,
+        "lastOk": bool(meta.get("last_ok", True)),
+        "lastError": meta.get("last_error") or "",
+    }
 
 
 @app.get("/api/news-updates")
@@ -722,12 +764,37 @@ def get_groups(
     return groups
 
 
+def _resolve_week_type(week: Optional[str]) -> str:
+    """Accept Числитель/Знаменатель or numerator/denominator aliases; default = current."""
+    raw = (week or "").strip()
+    if not raw:
+        return get_current_week_type()
+    low = raw.lower().replace("ё", "е")
+    if low in ("числитель", "numerator", "num", "current", "эта", "this"):
+        # "current" means the academic current week, not "whatever client sent empty"
+        if low in ("current", "эта", "this"):
+            return get_current_week_type()
+        return "Числитель"
+    if low in ("знаменатель", "denominator", "den", "next", "следующая"):
+        if low in ("next", "следующая"):
+            cur = get_current_week_type()
+            return "Знаменатель" if cur == "Числитель" else "Числитель"
+        return "Знаменатель"
+    if raw in WEEK_TYPES:
+        return raw
+    return get_current_week_type()
+
+
 @app.get("/api/schedule")
 def get_schedule(
     course: int = Query(..., ge=1, le=5),
     group: str = Query(...),
     subgroup: Optional[str] = Query(None),
     faculty: str = Query(DEFAULT_FACULTY),
+    week: Optional[str] = Query(
+        None,
+        description="Числитель | Знаменатель | next (другая относительно текущей)",
+    ),
     db: Session = Depends(get_db),
 ):
     try:
@@ -737,7 +804,7 @@ def get_schedule(
     if course not in courses_for(fid):
         raise HTTPException(status_code=400, detail=f"No course {course} for {fid}")
 
-    week = get_current_week_type()
+    week = _resolve_week_type(week)
     subgroup_key = subgroup or ""
 
     record = None
@@ -809,22 +876,24 @@ def schedule_by_teacher(
     q: str = Query(..., min_length=2, description="Фамилия или ФИО преподавателя"),
     day: str = Query("today", description="today | week | Понедельник…"),
     faculty: Optional[str] = Query(None),
+    week: Optional[str] = Query(None, description="Числитель | Знаменатель | next"),
     db: Session = Depends(get_db),
 ):
     """
     Fast cross-group lookup via inverted teacher index (rebuilt on schedule upload).
     """
-    week = get_current_week_type()
+    week = _resolve_week_type(week)
     query = q.strip()
 
-    # Hot path: never re-index Excel here. Only rebuild inverted index if missing.
+    # Hot path: never re-parse Excel here. Rebuild inverted index only if missing
+    # for the requested week (e.g. user asked for Знаменатель while index is Числитель).
     if not (load_index(week).get("surnames")):
         try:
             ensure_all_indexed(db, force=False)
             if not (load_index(week).get("surnames")):
                 rebuild_teacher_index(db, week)
         except Exception as exc:
-            print(f"[teacher-index] lazy rebuild: {exc}")
+            print(f"[teacher-index] lazy rebuild {week}: {exc}")
 
     day_key = (day or "today").strip()
     if day_key.lower() in ("today", "сегодня"):

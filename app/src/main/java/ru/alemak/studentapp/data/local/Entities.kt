@@ -6,6 +6,7 @@ import ru.alemak.studentapp.data.model.NewsItem
 import ru.alemak.studentapp.data.model.Reminder
 import ru.alemak.studentapp.data.model.ScheduleDay
 import ru.alemak.studentapp.data.model.Teacher
+import ru.alemak.studentapp.data.model.TeacherLesson
 
 @Entity(tableName = "cached_schedules")
 data class ScheduleCacheEntity(
@@ -75,6 +76,18 @@ data class NewsCacheEntity(
         )
     }
 }
+
+/** Cached GET /api/schedule/by-teacher for offline «сегодня у преподавателя». */
+@Entity(tableName = "cached_teacher_days")
+data class TeacherDayCacheEntity(
+    /** "$query|$day|$weekType" */
+    @PrimaryKey val cacheKey: String,
+    val query: String,
+    val day: String,
+    val weekType: String,
+    val lessons: List<TeacherLesson> = emptyList(),
+    val updatedAt: Long = System.currentTimeMillis(),
+)
 
 @Entity(tableName = "reminders")
 data class ReminderEntity(

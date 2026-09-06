@@ -34,9 +34,9 @@ enum FacultyCatalog {
 
     static func fullName(_ id: String) -> String {
         switch id {
-        case mtf: return "Машиностроительный технологический"
+        case mtf: return "Механико-технологический факультет"
         case masters: return "Магистратура (очное)"
-        default: return "Автоматика и электроника"
+        default: return "Факультет автоматики и электроники"
         }
     }
 

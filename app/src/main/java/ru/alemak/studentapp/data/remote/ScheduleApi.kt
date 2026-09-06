@@ -24,12 +24,14 @@ interface ScheduleApi {
         @Query("course") course: Int,
         @Query("group") group: String,
         @Query("subgroup") subgroup: String? = null,
+        @Query("week") week: String? = null,
     ): ScheduleResponseDto
 
     @GET("api/schedule/by-teacher")
     suspend fun getScheduleByTeacher(
         @Query("q") query: String,
         @Query("day") day: String = "today",
+        @Query("week") week: String? = null,
     ): TeacherScheduleResponseDto
 
     @GET("api/teachers")

@@ -103,14 +103,26 @@ fun ScheduleScreen(
                 }
 
                 Column(Modifier.padding(16.dp)) {
+                    val otherWeek =
+                        if (state.weekType == "Числитель") "Знаменатель" else "Числитель"
+                    val isCalendarWeek = state.weekType == state.calendarWeekType
                     Text(
-                        text = "Неделя: ${state.weekType}",
+                        text = buildString {
+                            append("Неделя: ${state.weekType}")
+                            if (isCalendarWeek) append(" · сейчас")
+                        },
                         color = accent,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    SelectionChip(
+                        text = "Показать $otherWeek",
+                        onClick = { viewModel.toggleWeekType() },
+                        compact = true,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 12.dp),
+                            .padding(top = 6.dp, bottom = 12.dp),
                     )
 
                     Text(

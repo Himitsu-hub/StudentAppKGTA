@@ -32,12 +32,12 @@ class NewsRepository @Inject constructor(
 
     suspend fun getNews(limit: Int = 15, force: Boolean = false): NewsLoadResult {
         // Try network; on VPN failure fall back to Room instantly usable cache.
-        val remote = runCatching {
-            api.getNews(limit = limit, force = force).news.map { it.toDomain() }
-        }.getOrNull()
+        val response = runCatching { api.getNews(limit = limit, force = force) }.getOrNull()
+        val remote = response?.news?.map { it.toDomain() }
 
         if (remote != null && remote.isNotEmpty()) {
-            val now = System.currentTimeMillis()
+            val serverTs = response.updatedAt?.let { (it * 1000.0).toLong() }?.takeIf { it > 0 }
+            val now = serverTs ?: System.currentTimeMillis()
             newsDao.clear()
             newsDao.upsertAll(
                 remote.mapIndexed { index, item ->

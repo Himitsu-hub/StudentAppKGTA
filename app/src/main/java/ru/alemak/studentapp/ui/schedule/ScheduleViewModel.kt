@@ -25,6 +25,8 @@ data class ScheduleUiState(
     val groups: Map<String, List<String>> = emptyMap(),
     val schedule: List<ScheduleDay> = emptyList(),
     val weekType: String = DateUtils.getCurrentWeekType(),
+    /** Academic «current» week (device calendar) — for badge «эта неделя». */
+    val calendarWeekType: String = DateUtils.getCurrentWeekType(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val usingCachedData: Boolean = false,
@@ -114,7 +116,7 @@ class ScheduleViewModel @Inject constructor(
             val s = _uiState.value
             _uiState.update { it.copy(group = group, subgroup = subgroup) }
             userPreferences.save(s.faculty, s.course, group, subgroup)
-            loadSchedule(s.faculty, s.course, group, subgroup)
+            loadSchedule(s.faculty, s.course, group, subgroup, weekType = s.weekType)
         }
     }
 
@@ -124,7 +126,7 @@ class ScheduleViewModel @Inject constructor(
             val group = s.group ?: return@launch
             _uiState.update { it.copy(subgroup = subgroup) }
             userPreferences.save(s.faculty, s.course, group, subgroup)
-            loadSchedule(s.faculty, s.course, group, subgroup)
+            loadSchedule(s.faculty, s.course, group, subgroup, weekType = s.weekType)
         }
     }
 
@@ -132,6 +134,27 @@ class ScheduleViewModel @Inject constructor(
         val s = _uiState.value
         viewModelScope.launch {
             loadForSelection(s.faculty, s.course, s.group, s.subgroup, pullRefresh = true)
+        }
+    }
+
+    /** Toggle Числитель ↔ Знаменатель without changing group selection. */
+    fun toggleWeekType() {
+        viewModelScope.launch {
+            val s = _uiState.value
+            val other = if (s.weekType == "Числитель") "Знаменатель" else "Числитель"
+            _uiState.update { it.copy(weekType = other, schedule = emptyList()) }
+            val group = s.group ?: return@launch
+            loadSchedule(s.faculty, s.course, group, s.subgroup, weekType = other)
+        }
+    }
+
+    fun selectWeekType(weekType: String) {
+        viewModelScope.launch {
+            val s = _uiState.value
+            if (s.weekType == weekType) return@launch
+            _uiState.update { it.copy(weekType = weekType, schedule = emptyList()) }
+            val group = s.group ?: return@launch
+            loadSchedule(s.faculty, s.course, group, s.subgroup, weekType = weekType)
         }
     }
 
@@ -149,9 +172,12 @@ class ScheduleViewModel @Inject constructor(
                 isRefreshing = pullRefresh || it.schedule.isNotEmpty(),
                 error = null,
                 usingCachedData = false,
-                weekType = DateUtils.getCurrentWeekType(),
+                calendarWeekType = DateUtils.getCurrentWeekType(),
+                // Keep user-selected week when switching faculty/course; default to calendar week.
+                weekType = it.weekType.ifBlank { DateUtils.getCurrentWeekType() },
             )
         }
+        val weekType = _uiState.value.weekType.ifBlank { DateUtils.getCurrentWeekType() }
         try {
             // Cache-first paint, then soft network refresh (VPN-friendly).
             var groups = scheduleRepository.getGroupsFromCacheOnly(fid, course)
@@ -201,7 +227,7 @@ class ScheduleViewModel @Inject constructor(
                     course = course,
                 )
             }
-            loadSchedule(fid, course, group, subgroup)
+            loadSchedule(fid, course, group, subgroup, weekType = weekType)
         } catch (e: Exception) {
             _uiState.update {
                 it.copy(
@@ -218,15 +244,19 @@ class ScheduleViewModel @Inject constructor(
         course: Int,
         group: String,
         subgroup: String?,
+        weekType: String = DateUtils.getCurrentWeekType(),
     ) {
-        _uiState.update { it.copy(isLoading = it.schedule.isEmpty(), error = null) }
+        val week = weekType.ifBlank { DateUtils.getCurrentWeekType() }
+        _uiState.update { it.copy(isLoading = it.schedule.isEmpty(), error = null, weekType = week) }
         try {
-            val cached = scheduleRepository.getScheduleFromCacheOnly(faculty, course, group, subgroup)
+            val cached = scheduleRepository.getScheduleFromCacheOnly(
+                faculty, course, group, subgroup, weekType = week,
+            )
             if (cached != null && cached.schedule.isNotEmpty()) {
                 _uiState.update {
                     it.copy(
                         schedule = cached.schedule,
-                        weekType = cached.weekType.ifBlank { DateUtils.getCurrentWeekType() },
+                        weekType = cached.weekType.ifBlank { week },
                         isLoading = false,
                         usingCachedData = true,
                         updatedLabel = TimeFormat.updatedAtLabel(cached.updatedAtMillis),
@@ -235,11 +265,13 @@ class ScheduleViewModel @Inject constructor(
                 }
             }
 
-            val result = scheduleRepository.getSchedule(faculty, course, group, subgroup)
+            val result = scheduleRepository.getSchedule(
+                faculty, course, group, subgroup, weekType = week,
+            )
             _uiState.update {
                 it.copy(
                     schedule = result.schedule,
-                    weekType = result.weekType.ifBlank { DateUtils.getCurrentWeekType() },
+                    weekType = result.weekType.ifBlank { week },
                     isLoading = false,
                     isRefreshing = false,
                     usingCachedData = result.isOffline,

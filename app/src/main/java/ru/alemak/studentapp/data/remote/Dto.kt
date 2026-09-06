@@ -104,6 +104,9 @@ data class TeacherDto(
 
 data class NewsResponseDto(
     val news: List<NewsItemDto> = emptyList(),
+    val count: Int? = null,
+    /** Server scrape time (unix seconds). */
+    val updatedAt: Double? = null,
 )
 
 data class NewsItemDto(

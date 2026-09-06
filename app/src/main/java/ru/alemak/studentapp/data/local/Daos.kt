@@ -11,6 +11,9 @@ interface ScheduleDao {
     @Query("SELECT * FROM cached_schedules WHERE cacheKey = :key LIMIT 1")
     suspend fun getSchedule(key: String): ScheduleCacheEntity?
 
+    @Query("SELECT * FROM cached_schedules")
+    suspend fun getAllSchedules(): List<ScheduleCacheEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSchedule(entity: ScheduleCacheEntity)
 
@@ -19,6 +22,12 @@ interface ScheduleDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertGroups(entity: GroupsCacheEntity)
+
+    @Query("SELECT * FROM cached_teacher_days WHERE cacheKey = :key LIMIT 1")
+    suspend fun getTeacherDay(key: String): TeacherDayCacheEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTeacherDay(entity: TeacherDayCacheEntity)
 }
 
 @Dao

@@ -57,7 +57,8 @@ actor APIClient {
         faculty: String = FacultyCatalog.fae,
         course: Int,
         group: String,
-        subgroup: String?
+        subgroup: String?,
+        week: String? = nil
     ) async throws -> ScheduleResult {
         var q: [(String, String)] = [
             ("faculty", faculty),
@@ -65,6 +66,7 @@ actor APIClient {
             ("group", group),
         ]
         if let subgroup, !subgroup.isEmpty { q.append(("subgroup", subgroup)) }
+        if let week, !week.isEmpty { q.append(("week", week)) }
         var result: ScheduleResult = try await get("/api/schedule", query: q)
         result.isOffline = false
         result.fromCache = false
@@ -72,11 +74,13 @@ actor APIClient {
         return result
     }
 
-    func scheduleByTeacher(query: String, day: String = "today") async throws -> TeacherScheduleResponse {
-        try await get("/api/schedule/by-teacher", query: [
+    func scheduleByTeacher(query: String, day: String = "today", week: String? = nil) async throws -> TeacherScheduleResponse {
+        var q: [(String, String)] = [
             ("q", query),
             ("day", day),
-        ])
+        ]
+        if let week, !week.isEmpty { q.append(("week", week)) }
+        return try await get("/api/schedule/by-teacher", query: q)
     }
 
     func weekType() async throws -> String {

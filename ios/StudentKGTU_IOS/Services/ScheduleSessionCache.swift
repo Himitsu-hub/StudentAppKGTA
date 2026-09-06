@@ -7,6 +7,7 @@ final class ScheduleSessionCache: ObservableObject {
     static let shared = ScheduleSessionCache()
 
     @Published private(set) var weekType: String = DateUtils.currentWeekType()
+    @Published private(set) var calendarWeekType: String = DateUtils.currentWeekType()
     @Published private(set) var schedule: [ScheduleDay] = []
     @Published private(set) var groups: [String: [String]] = [:]
     @Published private(set) var usingCached = false
@@ -17,12 +18,18 @@ final class ScheduleSessionCache: ObservableObject {
     private var loadedKey: String?
     private var lastNetworkAt: Date?
 
-    private func key(faculty: String, course: Int, group: String?, subgroup: String?) -> String {
-        "\(faculty)|\(course)|\(group ?? "")|\(subgroup ?? "")"
+    private func key(faculty: String, course: Int, group: String?, subgroup: String?, week: String) -> String {
+        "\(faculty)|\(course)|\(group ?? "")|\(subgroup ?? "")|\(week)"
     }
 
     func hasData(for prefs: UserPreferences) -> Bool {
-        let k = key(faculty: prefs.faculty, course: prefs.course, group: prefs.group, subgroup: prefs.subgroup)
+        let k = key(
+            faculty: prefs.faculty,
+            course: prefs.course,
+            group: prefs.group,
+            subgroup: prefs.subgroup,
+            week: weekType
+        )
         return loadedKey == k && !schedule.isEmpty
     }
 
@@ -34,7 +41,15 @@ final class ScheduleSessionCache: ObservableObject {
             return
         }
 
-        let k = key(faculty: prefs.faculty, course: prefs.course, group: group, subgroup: prefs.subgroup)
+        calendarWeekType = DateUtils.currentWeekType()
+        let week = weekType.isEmpty ? calendarWeekType : weekType
+        let k = key(
+            faculty: prefs.faculty,
+            course: prefs.course,
+            group: group,
+            subgroup: prefs.subgroup,
+            week: week
+        )
         let hasExisting = loadedKey == k && !schedule.isEmpty
         let recent = lastNetworkAt.map { Date().timeIntervalSince($0) < 90 } ?? false
 
@@ -47,10 +62,11 @@ final class ScheduleSessionCache: ObservableObject {
             faculty: prefs.faculty,
             course: prefs.course,
             group: group,
-            subgroup: prefs.subgroup
+            subgroup: prefs.subgroup,
+            weekType: week
         ), !disk.schedule.isEmpty {
             schedule = disk.schedule
-            weekType = disk.weekType.isEmpty ? DateUtils.currentWeekType() : disk.weekType
+            weekType = disk.weekType.isEmpty ? week : disk.weekType
             usingCached = true
             updatedLabel = TimeFormat.updatedAtLabel(millis: disk.updatedAtMillis)
             loadedKey = k
@@ -76,12 +92,13 @@ final class ScheduleSessionCache: ObservableObject {
             faculty: prefs.faculty,
             course: prefs.course,
             group: group,
-            subgroup: prefs.subgroup
+            subgroup: prefs.subgroup,
+            weekType: week
         )
         if !result.schedule.isEmpty || schedule.isEmpty {
             schedule = result.schedule
         }
-        weekType = result.weekType.isEmpty ? DateUtils.currentWeekType() : result.weekType
+        weekType = result.weekType.isEmpty ? week : result.weekType
         usingCached = result.isOffline
         updatedLabel = TimeFormat.updatedAtLabel(millis: result.updatedAtMillis) ?? updatedLabel
         loadedKey = k
@@ -92,6 +109,13 @@ final class ScheduleSessionCache: ObservableObject {
             error = "Нет сети и нет сохранённого расписания"
         }
         await WidgetUpdater.updateNow()
+    }
+
+    func toggleWeekType(prefs: UserPreferences) async {
+        weekType = (weekType == "Числитель") ? "Знаменатель" : "Числитель"
+        invalidate()
+        schedule = []
+        await load(prefs: prefs, force: true)
     }
 
     func invalidate() {

@@ -63,11 +63,12 @@ actor ScheduleRepository {
         faculty: String = FacultyCatalog.fae,
         course: Int,
         group: String,
-        subgroup: String?
+        subgroup: String?,
+        weekType: String = DateUtils.currentWeekType()
     ) async -> ScheduleResult {
-        let week = DateUtils.currentWeekType()
+        let week = weekType.isEmpty ? DateUtils.currentWeekType() : weekType
         let weekKey = Self.cacheKey(faculty: faculty, course: course, group: group, subgroup: subgroup, week: week)
-        let latestKey = "schedule_latest_\(faculty)_\(course)_\(group)_\(subgroup ?? "")"
+        let latestKey = "schedule_latest_\(faculty)_\(course)_\(group)_\(subgroup ?? "")_\(week)"
 
         if !NetworkMonitor.shared.isOnline {
             return cachedResult(weekKey: weekKey, latestKey: latestKey)
@@ -79,15 +80,18 @@ actor ScheduleRepository {
                 faculty: faculty,
                 course: course,
                 group: group,
-                subgroup: subgroup
+                subgroup: subgroup,
+                week: week
             )
             remote.isOffline = false
             remote.fromCache = false
             let now = Date().timeIntervalSince1970 * 1000
             remote.updatedAtMillis = now
-            JSONCache.save(remote, key: weekKey)
+            let savedWeek = remote.weekType.isEmpty ? week : remote.weekType
+            let savedKey = Self.cacheKey(faculty: faculty, course: course, group: group, subgroup: subgroup, week: savedWeek)
+            JSONCache.save(remote, key: savedKey)
             JSONCache.save(remote, key: latestKey)
-            JSONCache.saveMeta(key: weekKey, updatedAt: now)
+            JSONCache.saveMeta(key: savedKey, updatedAt: now)
             JSONCache.saveMeta(key: latestKey, updatedAt: now)
             return remote
         } catch {
@@ -101,11 +105,12 @@ actor ScheduleRepository {
         faculty: String = FacultyCatalog.fae,
         course: Int,
         group: String,
-        subgroup: String?
+        subgroup: String?,
+        weekType: String = DateUtils.currentWeekType()
     ) -> ScheduleResult? {
-        let week = DateUtils.currentWeekType()
+        let week = weekType.isEmpty ? DateUtils.currentWeekType() : weekType
         let weekKey = Self.cacheKey(faculty: faculty, course: course, group: group, subgroup: subgroup, week: week)
-        let latestKey = "schedule_latest_\(faculty)_\(course)_\(group)_\(subgroup ?? "")"
+        let latestKey = "schedule_latest_\(faculty)_\(course)_\(group)_\(subgroup ?? "")_\(week)"
         // Legacy key without faculty (pre-multi-faculty installs)
         let legacyWeek = "schedule_\(course)_\(group)_\(subgroup ?? "")_\(week)"
         let legacyLatest = "schedule_latest_\(course)_\(group)_\(subgroup ?? "")"
@@ -113,15 +118,31 @@ actor ScheduleRepository {
             ?? Self.cachedResult(weekKey: legacyWeek, latestKey: legacyLatest)
     }
 
-    func scheduleByTeacher(query: String, day: String = "today") async -> TeacherScheduleResponse {
-        if !NetworkMonitor.shared.isOnline {
-            return TeacherScheduleResponse(query: query, day: day)
+    func scheduleByTeacher(
+        query: String,
+        day: String = "today",
+        weekType: String = DateUtils.currentWeekType()
+    ) async -> TeacherScheduleResponse {
+        let week = weekType.isEmpty ? DateUtils.currentWeekType() : weekType
+        let dayKey = (day.lowercased() == "today" || day.lowercased() == "сегодня")
+            ? DateUtils.todayName()
+            : day
+        let cacheKey = "teacher_day_\(query.lowercased())_\(dayKey)_\(week)"
+
+        if NetworkMonitor.shared.isOnline {
+            do {
+                let remote = try await APIClient.shared.scheduleByTeacher(query: query, day: day, week: week)
+                JSONCache.save(remote, key: cacheKey)
+                return remote
+            } catch {
+                // fall through to cache
+            }
         }
-        do {
-            return try await APIClient.shared.scheduleByTeacher(query: query, day: day)
-        } catch {
-            return TeacherScheduleResponse(query: query, day: day)
+
+        if let cached = JSONCache.load(TeacherScheduleResponse.self, key: cacheKey) {
+            return cached
         }
+        return TeacherScheduleResponse(query: query, day: day, weekType: week)
     }
 
     private nonisolated static func cacheKey(

@@ -19,7 +19,7 @@ class TeachersRepository @Inject constructor(
     private val teacherDao: TeacherDao,
 ) {
     suspend fun getTeachersFromCacheOnly(): TeachersLoadResult {
-        val cached = teacherDao.getAll().map { it.toDomain() }
+        val cached = ensureLeadership(teacherDao.getAll().map { it.toDomain() })
         return TeachersLoadResult(cached, fromCache = cached.isNotEmpty())
     }
 
@@ -29,12 +29,27 @@ class TeachersRepository @Inject constructor(
         }.getOrNull()
 
         if (remote != null) {
+            val withLeaders = ensureLeadership(remote)
             teacherDao.clear()
-            teacherDao.upsertAll(remote.map { TeacherCacheEntity.fromDomain(it) })
-            return TeachersLoadResult(remote, fromCache = false)
+            teacherDao.upsertAll(withLeaders.map { TeacherCacheEntity.fromDomain(it) })
+            return TeachersLoadResult(withLeaders, fromCache = false)
         }
 
-        val cached = teacherDao.getAll().map { it.toDomain() }
+        val cached = ensureLeadership(teacherDao.getAll().map { it.toDomain() })
         return TeachersLoadResult(cached, fromCache = cached.isNotEmpty())
+    }
+
+    /** Rector may be missing from scraped кафедра pages — keep him in the list. */
+    private fun ensureLeadership(teachers: List<Teacher>): List<Teacher> {
+        val existing = teachers.map { it.name.lowercase().replace('ё', 'е') }.toSet()
+        val extras = mutableListOf<Teacher>()
+        val rector = Teacher(
+            name = "Егоров Алексей Васильевич",
+            position = "Ректор",
+        )
+        if (rector.name.lowercase().replace('ё', 'е') !in existing) {
+            extras += rector
+        }
+        return if (extras.isEmpty()) teachers else extras + teachers
     }
 }

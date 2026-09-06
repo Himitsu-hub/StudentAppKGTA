@@ -30,9 +30,14 @@ struct ScheduleView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Неделя: \(cache.weekType)")
+                    let otherWeek = cache.weekType == "Числитель" ? "Знаменатель" : "Числитель"
+                    let isCalendar = cache.weekType == cache.calendarWeekType
+                    Text("Неделя: \(cache.weekType)\(isCalendar ? " · сейчас" : "")")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(accent)
+                    selectionChip("Показать \(otherWeek)", compact: true) {
+                        Task { await cache.toggleWeekType(prefs: prefs) }
+                    }
 
                     Text("Факультет / курс / группа / подгруппа")
                         .font(.caption2)

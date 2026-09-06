@@ -9,10 +9,11 @@ import androidx.room.TypeConverters
         ScheduleCacheEntity::class,
         GroupsCacheEntity::class,
         TeacherCacheEntity::class,
+        TeacherDayCacheEntity::class,
         NewsCacheEntity::class,
         ReminderEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
