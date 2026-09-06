@@ -396,8 +396,12 @@ def _ensure_leadership(teachers: list) -> list:
 def get_teachers():
     if not TEACHERS_FILE.exists():
         return {"teachers": _ensure_leadership([])}
-    with open(TEACHERS_FILE, "r", encoding="utf-8") as f:
-        teachers = json.load(f)
+    try:
+        with open(TEACHERS_FILE, "r", encoding="utf-8") as f:
+            teachers = json.load(f)
+    except Exception as exc:
+        print(f"[teachers] corrupt teachers.json: {exc}")
+        return {"teachers": _ensure_leadership([]), "error": "teachers_cache_corrupt"}
     if isinstance(teachers, list):
         for t in teachers:
             if isinstance(t, dict) and "position" in t:
