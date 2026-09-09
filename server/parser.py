@@ -407,10 +407,11 @@ def parse_lesson_text(text: str, time: str) -> Optional[Lesson]:
         return None
 
     lesson_type = "занятие"
-    text_lower = text.lower()
-    if "лек" in text_lower:
+    text_lower = text.lower().replace("ё", "е")
+    # Excel uses short markers: "лек.", "прак.", "л/р", "лаб."
+    if re.search(r"(?i)\bлек(ция|ц\.?|\.?)\b", text_lower) or "лекция" in text_lower:
         lesson_type = "лекция"
-    elif "практ" in text_lower:
+    elif re.search(r"(?i)\bпрак(тика|т\.?|\.?)\b", text_lower) or "практика" in text_lower:
         lesson_type = "практика"
     elif "лаб" in text_lower or "л/р" in text_lower:
         lesson_type = "лабораторная"
@@ -418,7 +419,7 @@ def parse_lesson_text(text: str, time: str) -> Optional[Lesson]:
     # Special whole-day / non-class activities
     upper = subject.upper()
     if "ВОЕНН" in upper or "ФИЗИЧЕСКАЯ КУЛЬТУРА" in upper or "ОБЩАЯ ФИЗИЧЕСКАЯ" in upper:
-        if "лек" not in text_lower and "практ" not in text_lower and "лаб" not in text_lower:
+        if not re.search(r"(?i)\b(лек|прак|лаб|л/р)", text_lower):
             lesson_type = "занятие"
 
     online_notes = _online_notes(text)

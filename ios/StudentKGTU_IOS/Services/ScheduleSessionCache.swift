@@ -17,6 +17,8 @@ final class ScheduleSessionCache: ObservableObject {
 
     private var loadedKey: String?
     private var lastNetworkAt: Date?
+    /// Bumps on every week/group load so stale async responses are ignored.
+    private var loadEpoch: Int = 0
 
     private func key(faculty: String, course: Int, group: String?, subgroup: String?, week: String) -> String {
         "\(faculty)|\(course)|\(group ?? "")|\(subgroup ?? "")|\(week)"
@@ -43,6 +45,7 @@ final class ScheduleSessionCache: ObservableObject {
 
         calendarWeekType = DateUtils.currentWeekType()
         let week = weekType.isEmpty ? calendarWeekType : weekType
+        let epoch = loadEpoch
         let k = key(
             faculty: prefs.faculty,
             course: prefs.course,
@@ -57,7 +60,7 @@ final class ScheduleSessionCache: ObservableObject {
             return
         }
 
-        // Always try disk first (even if session already had data)
+        // Disk first for the *requested* week only.
         if let disk = ScheduleRepository.shared.getScheduleFromCacheOnly(
             faculty: prefs.faculty,
             course: prefs.course,
@@ -65,15 +68,15 @@ final class ScheduleSessionCache: ObservableObject {
             subgroup: prefs.subgroup,
             weekType: week
         ), !disk.schedule.isEmpty {
+            guard epoch == loadEpoch, weekType == week || weekType.isEmpty else { return }
             schedule = disk.schedule
-            weekType = disk.weekType.isEmpty ? week : disk.weekType
+            weekType = week
             usingCached = true
             updatedLabel = TimeFormat.updatedAtLabel(millis: disk.updatedAtMillis)
             loadedKey = k
             isLoading = false
         }
 
-        // Offline: stop here with cache (or error if empty)
         if !NetworkMonitor.shared.isOnline {
             error = schedule.isEmpty ? "Нет сети и нет сохранённого расписания" : nil
             usingCached = !schedule.isEmpty
@@ -95,10 +98,14 @@ final class ScheduleSessionCache: ObservableObject {
             subgroup: prefs.subgroup,
             weekType: week
         )
+        // Ignore stale responses from a previous week toggle.
+        guard epoch == loadEpoch else { return }
+        guard weekType == week || weekType.isEmpty else { return }
+
         if !result.schedule.isEmpty || schedule.isEmpty {
             schedule = result.schedule
         }
-        weekType = result.weekType.isEmpty ? week : result.weekType
+        weekType = week
         usingCached = result.isOffline
         updatedLabel = TimeFormat.updatedAtLabel(millis: result.updatedAtMillis) ?? updatedLabel
         loadedKey = k
@@ -112,10 +119,17 @@ final class ScheduleSessionCache: ObservableObject {
     }
 
     func toggleWeekType(prefs: UserPreferences) async {
-        weekType = (weekType == "Числитель") ? "Знаменатель" : "Числитель"
+        let other = (weekType == "Числитель") ? "Знаменатель" : "Числитель"
+        loadEpoch += 1
+        weekType = other
         invalidate()
-        schedule = []
+        // Keep current grid visible until the new week arrives (no blank flash).
+        isRefreshingSoft()
         await load(prefs: prefs, force: true)
+    }
+
+    private func isRefreshingSoft() {
+        isLoading = false
     }
 
     func invalidate() {

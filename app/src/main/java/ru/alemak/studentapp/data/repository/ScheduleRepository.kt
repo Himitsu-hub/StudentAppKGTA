@@ -161,19 +161,25 @@ class ScheduleRepository @Inject constructor(
 
         if (remote != null) {
             val now = System.currentTimeMillis()
-            val savedWeek = remote.weekType.ifBlank { week }
+            // Always key/store by the week we asked for — never let a mismatched
+            // server weekType label rewrite the user's selection.
             scheduleDao.upsertSchedule(
                 ScheduleCacheEntity(
-                    cacheKey = cacheKey(fid, course, group, subgroup, savedWeek),
+                    cacheKey = cacheKey(fid, course, group, subgroup, week),
                     course = course,
                     groupName = group,
                     subgroup = subgroup.orEmpty(),
-                    weekType = savedWeek,
+                    weekType = week,
                     schedule = remote.schedule,
                     updatedAt = now,
                 ),
             )
-            return remote.copy(isOffline = false, fromCache = false, updatedAtMillis = now)
+            return remote.copy(
+                weekType = week,
+                isOffline = false,
+                fromCache = false,
+                updatedAtMillis = now,
+            )
         }
 
         return cached ?: ScheduleResult(

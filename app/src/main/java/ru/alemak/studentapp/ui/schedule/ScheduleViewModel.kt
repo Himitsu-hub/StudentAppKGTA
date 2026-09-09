@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +46,10 @@ class ScheduleViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ScheduleUiState())
     val uiState: StateFlow<ScheduleUiState> = _uiState.asStateFlow()
 
+    /** Cancels in-flight schedule fetches so week toggles don't flash the previous week. */
+    private var scheduleJob: Job? = null
+    private val scheduleEpoch = AtomicInteger(0)
+
     init {
         viewModelScope.launch {
             val selection = userPreferences.selection.first()
@@ -55,6 +61,7 @@ class ScheduleViewModel @Inject constructor(
                     subgroup = selection.subgroup,
                     prefsLoaded = true,
                     weekType = DateUtils.getCurrentWeekType(),
+                    calendarWeekType = DateUtils.getCurrentWeekType(),
                 )
             }
             loadForSelection(
@@ -110,7 +117,8 @@ class ScheduleViewModel @Inject constructor(
     }
 
     fun selectGroup(group: String) {
-        viewModelScope.launch {
+        scheduleJob?.cancel()
+        scheduleJob = viewModelScope.launch {
             val subgroups = _uiState.value.groups[group].orEmpty()
             val subgroup = subgroups.firstOrNull()
             val s = _uiState.value
@@ -121,7 +129,8 @@ class ScheduleViewModel @Inject constructor(
     }
 
     fun selectSubgroup(subgroup: String) {
-        viewModelScope.launch {
+        scheduleJob?.cancel()
+        scheduleJob = viewModelScope.launch {
             val s = _uiState.value
             val group = s.group ?: return@launch
             _uiState.update { it.copy(subgroup = subgroup) }
@@ -132,28 +141,35 @@ class ScheduleViewModel @Inject constructor(
 
     fun refresh() {
         val s = _uiState.value
-        viewModelScope.launch {
+        scheduleJob?.cancel()
+        scheduleJob = viewModelScope.launch {
             loadForSelection(s.faculty, s.course, s.group, s.subgroup, pullRefresh = true)
         }
     }
 
     /** Toggle Числитель ↔ Знаменатель without changing group selection. */
     fun toggleWeekType() {
-        viewModelScope.launch {
-            val s = _uiState.value
-            val other = if (s.weekType == "Числитель") "Знаменатель" else "Числитель"
-            _uiState.update { it.copy(weekType = other, schedule = emptyList()) }
-            val group = s.group ?: return@launch
-            loadSchedule(s.faculty, s.course, group, s.subgroup, weekType = other)
-        }
+        val s = _uiState.value
+        val other = if (s.weekType == "Числитель") "Знаменатель" else "Числитель"
+        selectWeekType(other)
     }
 
     fun selectWeekType(weekType: String) {
-        viewModelScope.launch {
-            val s = _uiState.value
-            if (s.weekType == weekType) return@launch
-            _uiState.update { it.copy(weekType = weekType, schedule = emptyList()) }
-            val group = s.group ?: return@launch
+        val s = _uiState.value
+        if (s.weekType == weekType) return
+        val group = s.group ?: return
+        // Cancel any in-flight load so an older response cannot overwrite the new week.
+        scheduleJob?.cancel()
+        _uiState.update {
+            it.copy(
+                weekType = weekType,
+                // Keep previous grid until new week paints — avoids blank flash.
+                isLoading = false,
+                isRefreshing = true,
+                error = null,
+            )
+        }
+        scheduleJob = viewModelScope.launch {
             loadSchedule(s.faculty, s.course, group, s.subgroup, weekType = weekType)
         }
     }
@@ -247,16 +263,21 @@ class ScheduleViewModel @Inject constructor(
         weekType: String = DateUtils.getCurrentWeekType(),
     ) {
         val week = weekType.ifBlank { DateUtils.getCurrentWeekType() }
+        val epoch = scheduleEpoch.incrementAndGet()
         _uiState.update { it.copy(isLoading = it.schedule.isEmpty(), error = null, weekType = week) }
         try {
             val cached = scheduleRepository.getScheduleFromCacheOnly(
                 faculty, course, group, subgroup, weekType = week,
             )
-            if (cached != null && cached.schedule.isNotEmpty()) {
+            if (cached != null &&
+                cached.schedule.isNotEmpty() &&
+                epoch == scheduleEpoch.get() &&
+                _uiState.value.weekType == week
+            ) {
                 _uiState.update {
                     it.copy(
                         schedule = cached.schedule,
-                        weekType = cached.weekType.ifBlank { week },
+                        weekType = week,
                         isLoading = false,
                         usingCachedData = true,
                         updatedLabel = TimeFormat.updatedAtLabel(cached.updatedAtMillis),
@@ -268,10 +289,14 @@ class ScheduleViewModel @Inject constructor(
             val result = scheduleRepository.getSchedule(
                 faculty, course, group, subgroup, weekType = week,
             )
+            // Drop stale responses from a previous week toggle / group change.
+            if (epoch != scheduleEpoch.get() || _uiState.value.weekType != week) return
+            if (_uiState.value.group != group) return
+
             _uiState.update {
                 it.copy(
                     schedule = result.schedule,
-                    weekType = result.weekType.ifBlank { week },
+                    weekType = week,
                     isLoading = false,
                     isRefreshing = false,
                     usingCachedData = result.isOffline,
@@ -288,6 +313,7 @@ class ScheduleViewModel @Inject constructor(
                 )
             }
         } catch (e: Exception) {
+            if (epoch != scheduleEpoch.get()) return
             _uiState.update {
                 it.copy(
                     isLoading = false,
