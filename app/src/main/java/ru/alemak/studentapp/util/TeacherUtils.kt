@@ -48,7 +48,7 @@ object TeacherUtils {
     }
 
     fun sort(teachers: List<Teacher>): List<Teacher> =
-        teachers.sortedWith(compareBy({ leadershipPriority(it) }, { it.name }))
+        teachers.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
 
     private fun normalizeDept(raw: String): String {
         val lower = raw.lowercase()

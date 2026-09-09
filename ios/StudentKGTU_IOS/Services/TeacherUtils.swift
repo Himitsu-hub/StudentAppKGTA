@@ -63,10 +63,7 @@ enum TeacherUtils {
 
     static func sort(_ teachers: [Teacher]) -> [Teacher] {
         teachers.sorted {
-            let p0 = leadershipPriority($0)
-            let p1 = leadershipPriority($1)
-            if p0 != p1 { return p0 < p1 }
-            return $0.name < $1.name
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
     }
 
